@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Frase condizionale 15 (condizione non rispettata)</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body{
+      margin:0;
+      background:white;
+      font-family:sans-serif;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      min-height:100vh;
+    }
+
+    .wrapper{
+      width:100%;
+      max-width:900px;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+    }
+
+    .screen{
+      width:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:15px;
+      padding:10px 0;
+    }
+
+    .media-slot{
+      width:100%;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+    }
+
+    .media-wrap{
+      position:relative;
+      display:inline-block;
+      line-height:0;
+    }
+
+    .media{
+      max-width:80vw;
+      max-height:80vh;
+      width:auto;
+      height:auto;
+      object-fit:contain;
+      display:block;
+      cursor:pointer;
+      user-select:none;
+      -webkit-user-drag:none;
+      touch-action:manipulation;
+    }
+
+    /* spot stile "Frase attiva" */
+    .fade-spot{
+      position:absolute;
+      left:0;
+      top:0;
+      width:0;
+      height:0;
+      transform:translate(-50%, -50%);
+      pointer-events:none;
+      background:rgba(255,255,255,0.55);
+      -webkit-mask-image:radial-gradient(ellipse at center,
+        rgba(0,0,0,1) 0 82%,
+        rgba(0,0,0,0) 98%);
+              mask-image:radial-gradient(ellipse at center,
+        rgba(0,0,0,1) 0 82%,
+        rgba(0,0,0,0) 98%);
+    }
+
+    /* ✅ BOTTONE (via di mezzo, stile unico) */
+    .buttons-row{
+      display:flex;
+      justify-content:center;
+      width:100%;
+      max-width:380px;
+      margin-top:14px;
+    }
+
+    button{
+      width:100%;
+      padding:11px 22px;
+      font-size:17.5px;
+      border-radius:9px;
+      border:2px solid #333;
+      background:#f2f2f2;
+      cursor:pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrapper">
+    <div class="screen">
+
+      <div class="media-slot">
+        <div class="media-wrap">
+          <!-- ✅ come template che ti funziona -->
+          <img id="sceltaImg" class="media" alt="Immagine esercizio" />
+          <div id="fadeSpot" class="fade-spot" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <div class="buttons-row">
+        <button id="nextBtn">Prossima frase</button>
+      </div>
+
+      <audio id="audioStimolo">
+        <source id="audioSrc" type="audio/mp4" />
+      </audio>
+
+    </div>
+  </div>
+
+<script>
+/* =========================================================
+   PARAMETRI
+========================================================= */
+const ESERCIZIO = "Frase condizionale 15 (condizione non rispettata)";
+const CATEGORIA = "Frasi condizionali";
+const STIMOLO   = "Se c’è un cerchio verde, tocca il quadrato";
+
+const FASE = "prova";
+const INCLUDE_IN_PUNTEGGIO = true;
+
+const IMG_SRC   = "../immagini/Frase condizionale 15_no.png";
+const AUDIO_SRC = "../audio/Frase condizionale 15_no.m4a";
+
+/* ✅ posizioni gettoni (4 quadranti) */
+const nomiGettoni = {
+  alto_sx:  "quadrato nero",
+  alto_dx:  "cerchio bianco",
+  basso_sx: "cerchio giallo",
+  basso_dx: "triangolo verde"
+};
+/* ========================================================= */
+
+const STORAGE_KEY = "risposte_sessione";
+
+/* =========================================================
+   DOM
+========================================================= */
+const img      = document.getElementById("sceltaImg");
+const nextBtn  = document.getElementById("nextBtn");
+const audio    = document.getElementById("audioStimolo");
+const audioSrc = document.getElementById("audioSrc");
+const fadeSpot = document.getElementById("fadeSpot");
+
+img.src = IMG_SRC;
+audioSrc.src = AUDIO_SRC;
+audio.load();
+
+// autoplay (può fallire su mobile)
+window.addEventListener("load", () => {
+  audio.play().catch(() => {});
+});
+
+/* =========================
+   STATO
+========================= */
+let haRisposto = false;
+let gettoneScelto = null;
+
+/* =========================
+   QUADRANTE + SPOT
+========================= */
+function calcolaQuadrante(evt) {
+  const r = img.getBoundingClientRect();
+  const x = evt.clientX - r.left;
+  const y = evt.clientY - r.top;
+  if (y < r.height / 2) return (x < r.width / 2) ? "alto_sx" : "alto_dx";
+  return (x < r.width / 2) ? "basso_sx" : "basso_dx";
+}
+
+function fissaSpot(quadrante) {
+  const r = img.getBoundingClientRect();
+  const cx = quadrante.endsWith("sx") ? r.width * 0.25 : r.width * 0.75;
+  const cy = quadrante.startsWith("alto") ? r.height * 0.25 : r.height * 0.75;
+  const size = Math.max(150, Math.min(320, Math.min(r.width, r.height) * 0.52));
+  fadeSpot.style.width  = size + "px";
+  fadeSpot.style.height = size + "px";
+  fadeSpot.style.left   = cx + "px";
+  fadeSpot.style.top    = cy + "px";
+}
+
+/* =========================
+   TOCCO (registrato ma SBAGLIATO)
+   ✅ CORRETTO SE NON TOCCA
+========================= */
+img.addEventListener("pointerdown", (e) => {
+  if (haRisposto) return;
+
+  const q = calcolaQuadrante(e);
+  fissaSpot(q);
+
+  haRisposto = true;
+  gettoneScelto = nomiGettoni[q] || "tocco_non_mappato";
+});
+
+/* =========================
+   SALVATAGGIO
+========================= */
+function salva(record) {
+  const arr = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  arr.push(record);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+}
+
+function valutaESalva() {
+  const rispostaTxt = haRisposto
+    ? (gettoneScelto || "tocco_non_mappato")
+    : "nessun gettone";
+
+  const base = {
+    esercizio: ESERCIZIO,
+    categoria: CATEGORIA,
+    stimolo: STIMOLO,
+
+    fase: FASE,
+    include_in_punteggio: INCLUDE_IN_PUNTEGGIO,
+
+    ha_risposto: haRisposto,
+    risposta_grezza: rispostaTxt,
+    descrizione_risposta: haRisposto
+      ? ("Ha toccato il " + rispostaTxt)
+      : "Non ha toccato alcun gettone",
+
+    timestamp: new Date().toISOString()
+  };
+
+  const corretta = !haRisposto; // ✅ CORRETTO SE NON TOCCA
+  salva({ ...base, corretta, punteggio: corretta ? 1 : 0 });
+}
+
+/* =========================
+   PROSSIMA FRASE
+========================= */
+nextBtn.addEventListener("click", () => {
+  valutaESalva();
+  sessionStorage.setItem("fase", "test");
+  location.href = "index.html";
+});
+</script>
+</body>
+</html>
+
+

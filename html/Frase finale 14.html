@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Frase finale 14</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body{
+      margin:0;
+      background:white;
+      font-family:sans-serif;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      min-height:100vh;
+    }
+
+    .wrapper{
+      width:100%;
+      max-width:900px;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      padding:10px 0;
+    }
+
+    .screen{
+      width:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:15px;
+    }
+
+    canvas{
+      border:none !important;
+      touch-action:none;
+      max-width:80vw;
+      max-height:80vh;
+      width:auto;
+      height:auto;
+      display:block;
+    }
+
+    /* ✅ BOTTONE (via di mezzo, stile unico) */
+    .buttons-row{
+      display:flex;
+      justify-content:center;
+      width:100%;
+      max-width:380px;
+      margin-top:14px;
+    }
+
+    button{
+      width:100%;
+      padding:11px 22px;
+      font-size:17.5px;
+      border-radius:9px;
+      border:2px solid #333;
+      background:#f2f2f2;
+      cursor:pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+  <audio id="audioFrase">
+    <source src="../audio/Frase finale 14.m4a" type="audio/mp4" />
+  </audio>
+
+  <div class="wrapper">
+    <div class="screen">
+      <canvas id="scene"></canvas>
+
+      <!-- ✅ WRAP CORRETTO -->
+      <div class="buttons-row">
+        <button id="nextBtn">Prossima frase</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const canvas     = document.getElementById("scene");
+  const ctx        = canvas.getContext("2d");
+  const nextBtn    = document.getElementById("nextBtn");
+  const audioFrase = document.getElementById("audioFrase");
+
+  const WIDTH  = 800;
+  const HEIGHT = 500;
+  const ratio  = window.devicePixelRatio || 1;
+
+  canvas.width  = WIDTH * ratio;
+  canvas.height = HEIGHT * ratio;
+  ctx.scale(ratio, ratio);
+
+  // DIAGONALE:
+  // triangolo nero in alto a sinistra (attivo), triangolo giallo in basso a destra (passivo)
+  // Frase: "Usa il triangolo nero per spostare il triangolo giallo"
+  const startBlack  = { x: 240, y: 160, size: 90 }; // alto-sinistra
+  const startYellow = { x: 560, y: 340, size: 90 }; // basso-destra
+
+  const blackToken  = { x: startBlack.x,  y: startBlack.y,  size: startBlack.size };
+  const yellowToken = { x: startYellow.x, y: startYellow.y, size: startYellow.size };
+
+  let dragging = null;
+
+  let collisionByBlack = false;
+  let anyDrag = false;
+  let draggedBlack = false;
+  let draggedYellow = false;
+
+  /* ---------------- UTILI ---------------- */
+  function getTrianglePolygon(t) {
+    const halfH = t.size / 2;
+    const halfB = t.size * 0.55;
+
+    return [
+      { x: t.x,         y: t.y - halfH },
+      { x: t.x - halfB, y: t.y + halfH },
+      { x: t.x + halfB, y: t.y + halfH }
+    ];
+  }
+
+  function getAxes(poly) {
+    const axes = [];
+    for (let i = 0; i < poly.length; i++) {
+      const p1 = poly[i];
+      const p2 = poly[(i + 1) % poly.length];
+      const edge = { x: p2.x - p1.x, y: p2.y - p1.y };
+      let normal = { x: -edge.y, y: edge.x };
+      const len = Math.hypot(normal.x, normal.y);
+      if (len !== 0) {
+        normal.x /= len; normal.y /= len;
+        axes.push(normal);
+      }
+    }
+    return axes;
+  }
+
+  function projectPolygon(poly, axis) {
+    let min = poly[0].x * axis.x + poly[0].y * axis.y;
+    let max = min;
+    for (let i = 1; i < poly.length; i++) {
+      const p = poly[i];
+      const proj = p.x * axis.x + p.y * axis.y;
+      if (proj < min) min = proj;
+      if (proj > max) max = proj;
+    }
+    return { min, max };
+  }
+
+  function getMTV(polyA, polyB, centerA, centerB) {
+    const axes = [...getAxes(polyA), ...getAxes(polyB)];
+    let smallestOverlap = Infinity;
+    let smallestAxis = null;
+
+    for (const axis of axes) {
+      const projA = projectPolygon(polyA, axis);
+      const projB = projectPolygon(polyB, axis);
+      const overlap = Math.min(projA.max, projB.max) - Math.max(projA.min, projB.min);
+      if (overlap <= 0) return null;
+      if (overlap < smallestOverlap) {
+        smallestOverlap = overlap;
+        smallestAxis = axis;
+      }
+    }
+
+    const dir = (centerB.x - centerA.x) * smallestAxis.x + (centerB.y - centerA.y) * smallestAxis.y;
+    let axis = smallestAxis;
+    if (dir < 0) axis = { x: -smallestAxis.x, y: -smallestAxis.y };
+
+    return { x: axis.x * smallestOverlap, y: axis.y * smallestOverlap };
+  }
+
+  /* ---------------- DISEGNO ---------------- */
+  function drawTriangle(t, fill) {
+    const halfH = t.size / 2;
+    const halfB = t.size * 0.55;
+
+    ctx.beginPath();
+    ctx.moveTo(t.x,         t.y - halfH);
+    ctx.lineTo(t.x - halfB, t.y + halfH);
+    ctx.lineTo(t.x + halfB, t.y + halfH);
+    ctx.closePath();
+
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 1.5 / ratio;
+    ctx.stroke();
+  }
+
+  function drawScene() {
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+    drawTriangle(yellowToken, "yellow");
+    drawTriangle(blackToken,  "black");
+  }
+
+  /* ----------- COLLISIONI ---------------- */
+  function handleCollisionBlackPushYellow() {
+    const blackPoly  = getTrianglePolygon(blackToken);
+    const yellowPoly = getTrianglePolygon(yellowToken);
+
+    const mtv = getMTV(
+      blackPoly,
+      yellowPoly,
+      { x: blackToken.x,  y: blackToken.y },
+      { x: yellowToken.x, y: yellowToken.y }
+    );
+
+    if (mtv) {
+      yellowToken.x += mtv.x;
+      yellowToken.y += mtv.y;
+      collisionByBlack = true;
+    }
+  }
+
+  function handleCollisionYellowPushBlack() {
+    const blackPoly  = getTrianglePolygon(blackToken);
+    const yellowPoly = getTrianglePolygon(yellowToken);
+
+    const mtv = getMTV(
+      yellowPoly,
+      blackPoly,
+      { x: yellowToken.x, y: yellowToken.y },
+      { x: blackToken.x,  y: blackToken.y }
+    );
+
+    if (mtv) {
+      blackToken.x += mtv.x;
+      blackToken.y += mtv.y;
+    }
+  }
+
+  /* ---------------- HIT TEST ---------------- */
+  function insideTriangle(x, y, t) {
+    const halfH = t.size / 2;
+    const halfB = t.size * 0.55;
+
+    const ax = t.x,         ay = t.y - halfH;
+    const bx = t.x - halfB, by = t.y + halfH;
+    const cx = t.x + halfB, cy = t.y + halfH;
+
+    function sign(x1,y1,x2,y2,x3,y3){ return (x1-x3)*(y2-y3)-(x2-x3)*(y1-y3); }
+    const d1 = sign(x,y,ax,ay,bx,by);
+    const d2 = sign(x,y,bx,by,cx,cy);
+    const d3 = sign(x,y,cx,cy,ax,ay);
+    const hasNeg = (d1<0)||(d2<0)||(d3<0);
+    const hasPos = (d1>0)||(d2>0)||(d3>0);
+    return !(hasNeg && hasPos);
+  }
+
+  function getPos(evt) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = WIDTH / rect.width;
+    const scaleY = HEIGHT / rect.height;
+
+    let clientX, clientY;
+    if (evt.touches && evt.touches[0]) {
+      clientX = evt.touches[0].clientX;
+      clientY = evt.touches[0].clientY;
+    } else {
+      clientX = evt.clientX;
+      clientY = evt.clientY;
+    }
+
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top)  * scaleY
+    };
+  }
+
+  /* ---------------- DRAG ---------------- */
+  function startDrag(evt) {
+    const pos = getPos(evt);
+
+    if (insideTriangle(pos.x, pos.y, blackToken)) {
+      dragging = "black";
+      anyDrag = true;
+      draggedBlack = true;
+    }
+    else if (insideTriangle(pos.x, pos.y, yellowToken)) {
+      dragging = "yellow";
+      anyDrag = true;
+      draggedYellow = true;
+    }
+    else dragging = null;
+  }
+
+  function drag(evt) {
+    if (!dragging) return;
+    evt.preventDefault();
+
+    const pos = getPos(evt);
+
+    if (dragging === "black") {
+      blackToken.x = pos.x;
+      blackToken.y = pos.y;
+      handleCollisionBlackPushYellow();
+    } else if (dragging === "yellow") {
+      yellowToken.x = pos.x;
+      yellowToken.y = pos.y;
+      handleCollisionYellowPushBlack();
+    }
+
+    drawScene();
+  }
+
+  function stopDrag() { dragging = null; }
+
+  /* ---------------- AUDIO ---------------- */
+  function playFrase() {
+    audioFrase.currentTime = 0;
+    audioFrase.play().catch(() => {});
+  }
+
+  window.onload = () => {
+    drawScene();
+    playFrase();
+  };
+
+  /* ---------------- SALVATAGGIO ---------------- */
+  function salvaRispostaTerapeuta(dati) {
+    const key = "risposte_sessione";
+    const esistenti = JSON.parse(localStorage.getItem(key) || "[]");
+
+    esistenti.push({
+      esercizio: "Frase finale 14",
+      categoria: "Frasi finali",
+      stimolo: "Usa il triangolo nero per spostare il triangolo giallo",
+      ha_risposto: dati.ha_risposto,
+      risposta_grezza: dati.risposta_grezza,
+      descrizione_risposta: dati.descrizione_risposta,
+      corretta: dati.corretta,
+      punteggio: dati.punteggio,
+      ripetizioni_audio: 0,
+      timestamp: new Date().toISOString()
+    });
+
+    localStorage.setItem(key, JSON.stringify(esistenti));
+  }
+
+  function valutaESalva() {
+    let corretta        = false;
+    let punteggio       = 0;
+    let rispostaGrezza  = "";
+    let descrizioneResp = "";
+    let haRispostoFlag  = anyDrag;
+
+    const neroSiEMosso =
+      blackToken.x !== startBlack.x || blackToken.y !== startBlack.y;
+
+    const gialloSiEMosso =
+      yellowToken.x !== startYellow.x || yellowToken.y !== startYellow.y;
+
+    if (!anyDrag) {
+      corretta        = null;
+      punteggio       = 0;
+      rispostaGrezza  = "nessun movimento";
+      descrizioneResp = "Non ha mosso nessun gettone";
+    }
+    else if (collisionByBlack) {
+      corretta        = true;
+      punteggio       = 1;
+      rispostaGrezza  = "nero sposta giallo";
+      descrizioneResp = "Ha usato il triangolo nero per spostare il triangolo giallo";
+    }
+    else if (draggedYellow && neroSiEMosso) {
+      corretta        = false;
+      punteggio       = 0;
+      rispostaGrezza  = "giallo sposta nero";
+      descrizioneResp = "Ha usato il triangolo giallo per spostare il triangolo nero";
+    }
+    else if (
+      (draggedBlack && !gialloSiEMosso) ||
+      (draggedYellow && !neroSiEMosso)
+    ) {
+      corretta        = false;
+      punteggio       = 0;
+      rispostaGrezza  = "un gettone senza spostare l'altro";
+      descrizioneResp = "Ha spostato un gettone senza far spostare l’altro";
+    }
+    else {
+      corretta        = false;
+      punteggio       = 0;
+      rispostaGrezza  = "movimento non corretto";
+      descrizioneResp = "Ha mosso i gettoni senza rispettare la consegna";
+    }
+
+    salvaRispostaTerapeuta({
+      ha_risposto: haRispostoFlag,
+      risposta_grezza: rispostaGrezza,
+      descrizione_risposta: descrizioneResp,
+      corretta: corretta,
+      punteggio: punteggio
+    });
+  }
+
+  nextBtn.onclick = () => {
+    valutaESalva();
+    location.href = "index.html";
+  };
+
+  /* ---------------- EVENTI ---------------- */
+  canvas.addEventListener("mousedown", startDrag);
+  canvas.addEventListener("mousemove", drag);
+  window.addEventListener("mouseup", stopDrag);
+
+  canvas.addEventListener("touchstart", startDrag, { passive: false });
+  canvas.addEventListener("touchmove",  drag,      { passive: false });
+  canvas.addEventListener("touchend",   stopDrag);
+  canvas.addEventListener("touchcancel",stopDrag);
+
+  drawScene();
+</script>
+
+</body>
+</html>
+
+
+

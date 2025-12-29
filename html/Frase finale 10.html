@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Frase finale 10</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body{
+      margin:0;
+      background:white;
+      font-family:sans-serif;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      min-height:100vh;
+    }
+
+    .wrapper{
+      width:100%;
+      max-width:900px;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      padding:10px 0;
+    }
+
+    .screen{
+      width:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:15px;
+    }
+
+    canvas{
+      border:none !important;
+      touch-action:none;
+      max-width:80vw;
+      max-height:80vh;
+      width:auto;
+      height:auto;
+      display:block;
+    }
+
+    /* ✅ BOTTONE (via di mezzo, stile unico) */
+    .buttons-row{
+      display:flex;
+      justify-content:center;
+      width:100%;
+      max-width:380px;
+      margin-top:14px;
+    }
+
+    button{
+      width:100%;
+      padding:11px 22px;
+      font-size:17.5px;
+      border-radius:9px;
+      border:2px solid #333;
+      background:#f2f2f2;
+      cursor:pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+  <audio id="audioFrase">
+    <source src="../audio/Frase finale 10.m4a" type="audio/mp4" />
+  </audio>
+
+  <div class="wrapper">
+    <div class="screen">
+      <canvas id="scene"></canvas>
+
+      <!-- ✅ WRAP CORRETTO -->
+      <div class="buttons-row">
+        <button id="nextBtn">Prossima frase</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const canvas     = document.getElementById("scene");
+  const ctx        = canvas.getContext("2d");
+  const nextBtn    = document.getElementById("nextBtn");
+  const audioFrase = document.getElementById("audioFrase");
+
+  const WIDTH  = 800;
+  const HEIGHT = 500;
+  const ratio  = window.devicePixelRatio || 1;
+
+  canvas.width  = WIDTH * ratio;
+  canvas.height = HEIGHT * ratio;
+  ctx.scale(ratio, ratio);
+
+  // ORIZZONTALE:
+  // bianco a sinistra, verde a destra
+  // Frase: "Usa il quadrato verde per spostare il quadrato bianco"
+  const startWhite = { x: 240, y: 250, size: 90 }; // sinistra (passivo)
+  const startGreen = { x: 560, y: 250, size: 90 }; // destra (attivo)
+
+  const whiteToken = { x: startWhite.x, y: startWhite.y, size: startWhite.size };
+  const greenToken = { x: startGreen.x, y: startGreen.y, size: startGreen.size };
+
+  let dragging = null;
+
+  let collisionByGreen = false;
+  let anyDrag = false;
+  let draggedGreen = false;
+  let draggedWhite = false;
+
+  /* ---------------- UTILI ---------------- */
+  function getSquarePolygon(s) {
+    const h = s.size / 2;
+    return [
+      { x: s.x - h, y: s.y - h },
+      { x: s.x + h, y: s.y - h },
+      { x: s.x + h, y: s.y + h },
+      { x: s.x - h, y: s.y + h }
+    ];
+  }
+
+  function getAxes(poly) {
+    const axes = [];
+    for (let i = 0; i < poly.length; i++) {
+      const p1 = poly[i];
+      const p2 = poly[(i + 1) % poly.length];
+      const edge = { x: p2.x - p1.x, y: p2.y - p1.y };
+      let normal = { x: -edge.y, y: edge.x };
+      const len = Math.hypot(normal.x, normal.y);
+      if (len !== 0) {
+        normal.x /= len; normal.y /= len;
+        axes.push(normal);
+      }
+    }
+    return axes;
+  }
+
+  function projectPolygon(poly, axis) {
+    let min = poly[0].x * axis.x + poly[0].y * axis.y;
+    let max = min;
+    for (let i = 1; i < poly.length; i++) {
+      const p = poly[i];
+      const proj = p.x * axis.x + p.y * axis.y;
+      if (proj < min) min = proj;
+      if (proj > max) max = proj;
+    }
+    return { min, max };
+  }
+
+  function getMTV(polyA, polyB, centerA, centerB) {
+    const axes = [...getAxes(polyA), ...getAxes(polyB)];
+    let smallestOverlap = Infinity;
+    let smallestAxis = null;
+
+    for (const axis of axes) {
+      const projA = projectPolygon(polyA, axis);
+      const projB = projectPolygon(polyB, axis);
+      const overlap = Math.min(projA.max, projB.max) - Math.max(projA.min, projB.min);
+      if (overlap <= 0) return null;
+      if (overlap < smallestOverlap) {
+        smallestOverlap = overlap;
+        smallestAxis = axis;
+      }
+    }
+
+    const dir = (centerB.x - centerA.x) * smallestAxis.x + (centerB.y - centerA.y) * smallestAxis.y;
+    let axis = smallestAxis;
+    if (dir < 0) axis = { x: -smallestAxis.x, y: -smallestAxis.y };
+
+    return { x: axis.x * smallestOverlap, y: axis.y * smallestOverlap };
+  }
+
+  /* ---------------- DISEGNO ---------------- */
+  function drawSquare(s, fill) {
+    const h = s.size / 2;
+    ctx.beginPath();
+    ctx.rect(s.x - h, s.y - h, s.size, s.size);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 1.5 / ratio;
+    ctx.stroke();
+  }
+
+  function drawScene() {
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+    drawSquare(whiteToken, "white");
+    drawSquare(greenToken, "green");
+  }
+
+  /* ----------- COLLISIONI ---------------- */
+  function handleCollisionGreenPushWhite() {
+    const greenPoly = getSquarePolygon(greenToken);
+    const whitePoly = getSquarePolygon(whiteToken);
+
+    const mtv = getMTV(
+      greenPoly,
+      whitePoly,
+      { x: greenToken.x, y: greenToken.y },
+      { x: whiteToken.x, y: whiteToken.y }
+    );
+
+    if (mtv) {
+      whiteToken.x += mtv.x;
+      whiteToken.y += mtv.y;
+      collisionByGreen = true;
+    }
+  }
+
+  function handleCollisionWhitePushGreen() {
+    const greenPoly = getSquarePolygon(greenToken);
+    const whitePoly = getSquarePolygon(whiteToken);
+
+    const mtv = getMTV(
+      whitePoly,
+      greenPoly,
+      { x: whiteToken.x, y: whiteToken.y },
+      { x: greenToken.x, y: greenToken.y }
+    );
+
+    if (mtv) {
+      greenToken.x += mtv.x;
+      greenToken.y += mtv.y;
+    }
+  }
+
+  /* ---------------- HIT TEST ---------------- */
+  function insideSquare(x, y, s) {
+    const h = s.size / 2;
+    return (x >= s.x - h && x <= s.x + h && y >= s.y - h && y <= s.y + h);
+  }
+
+  function getPos(evt) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = WIDTH / rect.width;
+    const scaleY = HEIGHT / rect.height;
+
+    let clientX, clientY;
+    if (evt.touches && evt.touches[0]) {
+      clientX = evt.touches[0].clientX;
+      clientY = evt.touches[0].clientY;
+    } else {
+      clientX = evt.clientX;
+      clientY = evt.clientY;
+    }
+
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    };
+  }
+
+  /* ---------------- DRAG ---------------- */
+  function startDrag(evt) {
+    const pos = getPos(evt);
+
+    if (insideSquare(pos.x, pos.y, greenToken)) {
+      dragging = "green";
+      anyDrag = true;
+      draggedGreen = true;
+    }
+    else if (insideSquare(pos.x, pos.y, whiteToken)) {
+      dragging = "white";
+      anyDrag = true;
+      draggedWhite = true;
+    }
+    else dragging = null;
+  }
+
+  function drag(evt) {
+    if (!dragging) return;
+    evt.preventDefault();
+
+    const pos = getPos(evt);
+
+    if (dragging === "green") {
+      greenToken.x = pos.x;
+      greenToken.y = pos.y;
+      handleCollisionGreenPushWhite();
+    } else if (dragging === "white") {
+      whiteToken.x = pos.x;
+      whiteToken.y = pos.y;
+      handleCollisionWhitePushGreen();
+    }
+
+    drawScene();
+  }
+
+  function stopDrag() { dragging = null; }
+
+  /* ---------------- AUDIO ---------------- */
+  function playFrase() {
+    audioFrase.currentTime = 0;
+    audioFrase.play().catch(() => {});
+  }
+
+  window.onload = () => {
+    drawScene();
+    playFrase();
+  };
+
+  /* ---------------- SALVATAGGIO ---------------- */
+  function salvaRispostaTerapeuta(dati) {
+    const key = "risposte_sessione";
+    const esistenti = JSON.parse(localStorage.getItem(key) || "[]");
+
+    esistenti.push({
+      esercizio: "Frase finale 10",
+      categoria: "Frasi finali",
+      stimolo: "Usa il quadrato verde per spostare il quadrato bianco",
+      ha_risposto: dati.ha_risposto,
+      risposta_grezza: dati.risposta_grezza,
+      descrizione_risposta: dati.descrizione_risposta,
+      corretta: dati.corretta,
+      punteggio: dati.punteggio,
+      ripetizioni_audio: 0,
+      timestamp: new Date().toISOString()
+    });
+
+    localStorage.setItem(key, JSON.stringify(esistenti));
+  }
+
+  function valutaESalva() {
+    let corretta        = false;
+    let punteggio       = 0;
+    let rispostaGrezza  = "";
+    let descrizioneResp = "";
+    let haRispostoFlag  = anyDrag;
+
+    const verdeSiEMosso =
+      greenToken.x !== startGreen.x || greenToken.y !== startGreen.y;
+
+    const biancoSiEMosso =
+      whiteToken.x !== startWhite.x || whiteToken.y !== startWhite.y;
+
+    if (!anyDrag) {
+      corretta        = null;
+      punteggio       = 0;
+      rispostaGrezza  = "nessun movimento";
+      descrizioneResp = "Non ha mosso nessun gettone";
+    }
+    else if (collisionByGreen) {
+      corretta        = true;
+      punteggio       = 1;
+      rispostaGrezza  = "verde sposta bianco";
+      descrizioneResp = "Ha usato il quadrato verde per spostare il quadrato bianco";
+    }
+    else if (draggedWhite && verdeSiEMosso) {
+      corretta        = false;
+      punteggio       = 0;
+      rispostaGrezza  = "bianco sposta verde";
+      descrizioneResp = "Ha usato il quadrato bianco per spostare il quadrato verde";
+    }
+    else if (
+      (draggedGreen && !biancoSiEMosso) ||
+      (draggedWhite && !verdeSiEMosso)
+    ) {
+      corretta        = false;
+      punteggio       = 0;
+      rispostaGrezza  = "un gettone senza spostare l'altro";
+      descrizioneResp = "Ha spostato un gettone senza far spostare l’altro";
+    }
+    else {
+      corretta        = false;
+      punteggio       = 0;
+      rispostaGrezza  = "movimento non corretto";
+      descrizioneResp = "Ha mosso i gettoni senza rispettare la consegna";
+    }
+
+    salvaRispostaTerapeuta({
+      ha_risposto: haRispostoFlag,
+      risposta_grezza: rispostaGrezza,
+      descrizione_risposta: descrizioneResp,
+      corretta: corretta,
+      punteggio: punteggio
+    });
+  }
+
+  nextBtn.onclick = () => {
+    valutaESalva();
+    location.href = "index.html";
+  };
+
+  /* ---------------- EVENTI ---------------- */
+  canvas.addEventListener("mousedown", startDrag);
+  canvas.addEventListener("mousemove", drag);
+  window.addEventListener("mouseup", stopDrag);
+
+  canvas.addEventListener("touchstart", startDrag, { passive: false });
+  canvas.addEventListener("touchmove",  drag,      { passive: false });
+  canvas.addEventListener("touchend",   stopDrag);
+  canvas.addEventListener("touchcancel",stopDrag);
+
+  drawScene();
+</script>
+
+</body>
+</html>
+
+
+
+
+

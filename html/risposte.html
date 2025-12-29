@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Risposte – Prova</title>
+
+  <style>
+    body{
+      font-family: sans-serif;
+      padding: 20px;
+      background: #fafafa;
+    }
+
+    h1, h2{ margin-top: 0; }
+
+    .summary{
+      margin-bottom: 15px;
+      font-size: 15px;
+    }
+
+    table{
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 15px;
+      background: #ffffff;
+    }
+
+    th, td{
+      border: 1px solid #ccc;
+      padding: 6px 8px;
+      font-size: 14px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th{ background: #eee; }
+
+    .badge{
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      display: inline-block;
+    }
+
+    .ok{ background: #c8e6c9; border: 1px solid #388e3c; }
+    .no{ background: #ffcdd2; border: 1px solid #c62828; }
+    .nr{ background: #fff9c4; border: 1px solid #f9a825; }
+
+    /* ✅ BOTTONI COME PRIMA: orizzontali vicini */
+    .controls{
+      margin-top: 15px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    button{
+      padding: 8px 16px;
+      font-size: 14px;
+      border-radius: 9px;
+      border: 2px solid #333;
+      background: #f2f2f2;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Risposte sessione – Prova</h1>
+
+  <div class="summary" id="totale"></div>
+  <div class="category-summary" id="perCategoria"></div>
+
+  <table id="tabella">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Esercizio</th>
+        <th>Categoria</th>
+        <th>Stimolo</th>
+        <th>Risposta</th>
+        <th>Esito</th>
+        <th>Punti</th>
+        <th>Ora</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div class="controls">
+    <button onclick="tornaIndex()">Torna all'Index</button>
+    <button onclick="cancella()">Cancella risposte</button>
+    <button onclick="scaricaCSV()">Scarica tabella</button>
+  </div>
+
+<script>
+const STORAGE_KEY = "risposte_sessione";
+const tbody = document.querySelector("#tabella tbody");
+const totaleDiv = document.getElementById("totale");
+const perCatDiv = document.getElementById("perCategoria");
+
+const risposteRaw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+const risposte = risposteRaw.filter(r => r.include_in_punteggio !== false);
+
+/* =========================
+   ESITO
+========================= */
+function formatEsito(r) {
+  const span = document.createElement("span");
+  span.classList.add("badge");
+
+  const isCondNonRispettata =
+    r.categoria === "Frasi condizionali" &&
+    typeof r.esercizio === "string" &&
+    r.esercizio.toLowerCase().includes("condizione non rispettata");
+
+  // ✅ REGOLA SPECIALE
+  if (isCondNonRispettata && r.corretta === true) {
+    span.textContent = "Corretto";
+    span.classList.add("ok");
+    return span;
+  }
+
+  // ⬇️ comportamento standard
+  if (r.ha_risposto === false) {
+    span.textContent = "Non risponde";
+    span.classList.add("nr");
+  } else if (r.corretta === true) {
+    span.textContent = "Corretto";
+    span.classList.add("ok");
+  } else if (r.corretta === false) {
+    span.textContent = "Errato";
+    span.classList.add("no");
+  } else {
+    span.textContent = "-";
+  }
+
+  return span;
+}
+
+/* =========================
+   TABELLA
+========================= */
+function popolaTabella() {
+  tbody.innerHTML = "";
+
+  let sommaPunti = 0;
+  const stats = {};
+
+  risposte.forEach((r, idx) => {
+    const punti = Number(r.punteggio || 0);
+    sommaPunti += punti;
+
+    if (!stats[r.categoria]) stats[r.categoria] = { p:0, t:0 };
+    stats[r.categoria].p += punti;
+    stats[r.categoria].t += 1;
+
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td>${idx + 1}</td>
+      <td>${r.esercizio || ""}</td>
+      <td>${r.categoria || ""}</td>
+      <td>${r.stimolo || ""}</td>
+      <td>${
+        r.categoria === "Frasi condizionali" &&
+        typeof r.esercizio === "string" &&
+        r.esercizio.toLowerCase().includes("condizione non rispettata")
+          ? (r.descrizione_risposta || "")
+          : (r.ha_risposto ? (r.descrizione_risposta || "") : "")
+      }</td>
+      <td></td>
+      <td>${punti}</td>
+      <td>${r.timestamp ? new Date(r.timestamp).toLocaleTimeString() : ""}</td>
+    `;
+
+    tr.children[5].appendChild(formatEsito(r));
+    tbody.appendChild(tr);
+  });
+
+  totaleDiv.textContent = `Punteggio totale: ${sommaPunti} / ${risposte.length}`;
+
+  let html = "<h2>Riepilogo per tipo di frase</h2><ul>";
+  Object.keys(stats).forEach(c => {
+    html += `<li><strong>${c}</strong>: ${stats[c].p} / ${stats[c].t}</li>`;
+  });
+  html += "</ul>";
+  perCatDiv.innerHTML = html;
+}
+
+/* =========================
+   CONTROLLI
+========================= */
+function tornaIndex() {
+  localStorage.removeItem(STORAGE_KEY);
+  sessionStorage.clear();
+  location.href = "index.html";
+}
+
+function cancella() {
+  if (confirm("Vuoi cancellare tutte le risposte della PROVA?")) {
+    localStorage.removeItem(STORAGE_KEY);
+    location.reload();
+  }
+}
+
+function scaricaCSV() {
+  if (!risposte.length) return;
+
+  const rows = [["N","Esercizio","Categoria","Stimolo","Ha_risposto","Risposta","Corretta","Punteggio","Timestamp"]];
+  risposte.forEach((r,i) => {
+    rows.push([
+        i + 1,
+        r.esercizio || "",
+        r.categoria || "",
+        r.stimolo || "",
+        r.ha_risposto === true ? "sì" : (r.ha_risposto === false ? "no" : ""),
+        (r.descrizione_risposta || r.risposta_grezza || ""),
+        r.corretta === true ? "corretto" : (r.corretta === false ? "errato" : ""),
+        r.punteggio != null ? r.punteggio : "",
+        r.timestamp || ""
+      ]);
+    });
+
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "risposte_prova.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+popolaTabella();
+</script>
+
+</body>
+</html>
+

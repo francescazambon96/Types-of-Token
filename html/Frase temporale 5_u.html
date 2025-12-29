@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Frase temporale 5 (ordine lineare = ordine eventi)</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: white;
+      font-family: sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .wrapper {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .screen {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      padding: 10px 0;
+    }
+
+    .media-slot {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .media-wrap {
+      position: relative;
+      display: inline-block;
+      line-height: 0;
+    }
+
+    .media {
+      max-width: 80vw;
+      max-height: 80vh;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      display: block;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-drag: none;
+      touch-action: manipulation;
+    }
+
+    .fade-spot {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 0;
+      height: 0;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      background: rgba(255,255,255,0.55);
+      -webkit-mask-image: radial-gradient(ellipse at center,
+        rgba(0,0,0,1) 0 82%,
+        rgba(0,0,0,0) 98%);
+              mask-image: radial-gradient(ellipse at center,
+        rgba(0,0,0,1) 0 82%,
+        rgba(0,0,0,0) 98%);
+    }
+
+      /* ✅ BOTTONE (via di mezzo, stile unico) */
+    .buttons-row{
+      display:flex;
+      justify-content:center;
+      width:100%;
+      max-width:380px;
+      margin-top:14px;
+    }
+
+    button{
+      width:100%;
+      padding:11px 22px;
+      font-size:17.5px;
+      border-radius:9px;
+      border:2px solid #333;
+      background:#f2f2f2;
+      cursor:pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrapper">
+    <div class="screen">
+
+      <div class="media-slot">
+        <div class="media-wrap">
+          <img id="sceltaImg" class="media" alt="Immagine esercizio" />
+          <div id="fadeSpot1" class="fade-spot" aria-hidden="true"></div>
+          <div id="fadeSpot2" class="fade-spot" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <div class="buttons-row">
+        <button id="nextBtn">Prossima frase</button>
+      </div>
+
+      <audio id="audioStimolo">
+        <source id="audioSrc" type="audio/mp4" />
+      </audio>
+
+    </div>
+  </div>
+
+<script>
+/* =========================================================
+   🔧 PARAMETRI DA CAMBIARE (PROVA VERA)
+========================================================= */
+const ESERCIZIO = "Frase temporale 5 (ordine lineare = ordine eventi)";
+const CATEGORIA = "Frasi temporali (ordine lineare = ordine eventi)";
+const STIMOLO   = "Tocca il quadrato giallo prima di toccare il cerchio bianco";
+
+const FASE = "prova";
+const INCLUDE_IN_PUNTEGGIO = true;
+
+const IMG_SRC   = "../immagini/Frase temporale 5_u.png";
+const AUDIO_SRC = "../audio/Frase temporale 5_u.m4a";
+
+const nomiGettoni = {
+  alto_sx:  "quadrato giallo",
+  alto_dx:  "quadrato verde",
+  basso_sx: "cerchio bianco",
+  basso_dx: "cerchio rosso"
+};
+
+const GETTONI_CORRETTI = ["quadrato giallo", "cerchio bianco"];
+/* ========================================================= */
+
+// salva insieme alle altre della prova
+const STORAGE_KEY = "risposte_sessione";
+
+const img      = document.getElementById("sceltaImg");
+const nextBtn  = document.getElementById("nextBtn");
+const audio    = document.getElementById("audioStimolo");
+const audioSrc = document.getElementById("audioSrc");
+const spot1    = document.getElementById("fadeSpot1");
+const spot2    = document.getElementById("fadeSpot2");
+
+img.src = IMG_SRC;
+audioSrc.src = AUDIO_SRC;
+audio.load();
+
+window.addEventListener("load", () => {
+  audio.play().catch(() => {});
+});
+
+/* =========================
+   STATO (2 tocchi)
+========================= */
+let tocchi = 0;
+let haRisposto = false;
+
+let q1 = null, q2 = null;
+let scelta1 = null, scelta2 = null;
+
+/* =========================
+   QUADRANTE + SPOT
+========================= */
+function calcolaQuadrante(evt) {
+  const r = img.getBoundingClientRect();
+  const x = evt.clientX - r.left;
+  const y = evt.clientY - r.top;
+  if (y < r.height / 2) return (x < r.width / 2) ? "alto_sx" : "alto_dx";
+  return (x < r.width / 2) ? "basso_sx" : "basso_dx";
+}
+
+function posizionaSpot(spotEl, quadrante) {
+  const r = img.getBoundingClientRect();
+  const cx = quadrante.endsWith("sx") ? r.width * 0.25 : r.width * 0.75;
+  const cy = quadrante.startsWith("alto") ? r.height * 0.25 : r.height * 0.75;
+  const size = Math.max(150, Math.min(320, Math.min(r.width, r.height) * 0.52));
+
+  spotEl.style.width  = size + "px";
+  spotEl.style.height = size + "px";
+  spotEl.style.left   = cx + "px";
+  spotEl.style.top    = cy + "px";
+}
+
+function descrizioneDueTocchi(t1, t2){
+  if(!t1 && !t2) return "Non ha toccato alcun gettone";
+  if(t1 && !t2)  return "Ha toccato il " + t1;
+  if(!t1 && t2)  return "Ha toccato il " + t2;
+  return "Ha toccato il " + t1 + " e il " + t2;
+}
+
+/* =========================
+   DUE TOCCHI
+========================= */
+img.addEventListener("pointerdown", (e) => {
+  if (tocchi >= 2) return;
+
+  const q = calcolaQuadrante(e);
+  const nome = nomiGettoni[q] || null;
+
+  tocchi += 1;
+  haRisposto = true;
+
+  if (tocchi === 1) {
+    q1 = q;
+    scelta1 = nome;
+    posizionaSpot(spot1, q1);
+  } else {
+    q2 = q;
+    scelta2 = nome;
+    posizionaSpot(spot2, q2);
+  }
+});
+
+/* =========================
+   SALVATAGGIO
+========================= */
+function salva(record) {
+  const arr = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  arr.push(record);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+}
+
+function valutaESalva() {
+  const t1 = scelta1 || null;
+  const t2 = scelta2 || null;
+
+  const rispostaTxt = haRisposto
+    ? `tocco1: ${t1 || "nessun tocco 1"}; tocco2: ${t2 || "nessun tocco 2"}`
+    : "nessun gettone";
+
+  const base = {
+    esercizio: ESERCIZIO,
+    categoria: CATEGORIA,
+    stimolo: STIMOLO,
+
+    fase: FASE,
+    include_in_punteggio: INCLUDE_IN_PUNTEGGIO,
+
+    ha_risposto: haRisposto,
+    risposta_grezza: rispostaTxt,
+    descrizione_risposta: descrizioneDueTocchi(t1, t2),
+
+    dettagli_tocchi: {
+      tocchi_effettuati: tocchi,
+      quadrante1: q1, scelta1: scelta1,
+      quadrante2: q2, scelta2: scelta2
+    },
+
+    timestamp: new Date().toISOString()
+  };
+
+  const corretta = (tocchi >= 2) &&
+                   (scelta1 === GETTONI_CORRETTI[0]) &&
+                   (scelta2 === GETTONI_CORRETTI[1]);
+
+  salva({ ...base, corretta: corretta, punteggio: corretta ? 1 : 0 });
+}
+
+/* =========================
+   PROSSIMA FRASE
+========================= */
+nextBtn.addEventListener("click", () => {
+  valutaESalva();
+  location.href = "index.html";
+});
+</script>
+</body>
+</html>

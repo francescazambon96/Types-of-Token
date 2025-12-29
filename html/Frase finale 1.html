@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Frase finale 1</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: white;
+      font-family: sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .wrapper {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .screen {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      padding: 10px 0;
+    }
+
+    .media-slot {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    canvas {
+      border: none !important;
+      touch-action: none;
+      max-width: 80vw;
+      max-height: 80vh;
+      width: auto;
+      height: auto;
+      display: block;
+    }
+
+    /* ✅ BOTTONE (via di mezzo, stile unico) */
+    .buttons-row{
+      display:flex;
+      justify-content:center;
+      width:100%;
+      max-width:380px;
+      margin-top:14px;
+    }
+
+    button{
+      width:100%;
+      padding:11px 22px;
+      font-size:17.5px;
+      border-radius:9px;
+      border:2px solid #333;
+      background:#f2f2f2;
+      cursor:pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+  <audio id="audioFrase">
+    <source src="../audio/Frase finale 1.m4a" type="audio/mp4" />
+  </audio>
+
+  <div class="wrapper">
+    <div class="screen">
+      <div class="media-slot">
+        <canvas id="scene"></canvas>
+      </div>
+
+      <div class="buttons-row">
+        <button id="nextBtn">Prossima frase</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const canvas     = document.getElementById("scene");
+  const ctx        = canvas.getContext("2d");
+  const nextBtn    = document.getElementById("nextBtn");
+  const audioFrase = document.getElementById("audioFrase");
+
+  const WIDTH  = 800;
+  const HEIGHT = 500;
+  const ratio  = window.devicePixelRatio || 1;
+
+  canvas.width  = WIDTH * ratio;
+  canvas.height = HEIGHT * ratio;
+  ctx.scale(ratio, ratio);
+
+  // DUE CERCHI IN DIAGONALE:
+  // nero (alto-sinistra) e rosso (basso-destra)
+  const startBlack = { x: 240, y: 160, radius: 45 };
+  const startRed   = { x: 560, y: 340, radius: 45 };
+
+  const blackToken = { x: startBlack.x, y: startBlack.y, radius: startBlack.radius };
+  const redToken   = { x: startRed.x,   y: startRed.y,   radius: startRed.radius };
+
+  let dragging = null;
+
+  let collisionByBlack = false;   // vero se il nero ha spinto il rosso
+  let anyDrag = false;
+  let draggedBlack = false;
+  let draggedRed = false;
+
+  /* ---------------- UTILI ---------------- */
+  function distance(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); }
+
+  function getCirclePolygon(c) {
+    const sides = 18;
+    const poly = [];
+    for (let i = 0; i < sides; i++) {
+      const angle = (2 * Math.PI * i) / sides;
+      poly.push({ x: c.x + c.radius * Math.cos(angle), y: c.y + c.radius * Math.sin(angle) });
+    }
+    return poly;
+  }
+
+  function getAxes(poly) {
+    const axes = [];
+    for (let i = 0; i < poly.length; i++) {
+      const p1 = poly[i];
+      const p2 = poly[(i + 1) % poly.length];
+      const edge = { x: p2.x - p1.x, y: p2.y - p1.y };
+      let normal = { x: -edge.y, y: edge.x };
+      const len = Math.hypot(normal.x, normal.y);
+      if (len !== 0) {
+        normal.x /= len; normal.y /= len;
+        axes.push(normal);
+      }
+    }
+    return axes;
+  }
+
+  function projectPolygon(poly, axis) {
+    let min = poly[0].x * axis.x + poly[0].y * axis.y;
+    let max = min;
+    for (let i = 1; i < poly.length; i++) {
+      const p = poly[i];
+      const proj = p.x * axis.x + p.y * axis.y;
+      if (proj < min) min = proj;
+      if (proj > max) max = proj;
+    }
+    return { min, max };
+  }
+
+  function getMTV(polyA, polyB, centerA, centerB) {
+    const axes = [...getAxes(polyA), ...getAxes(polyB)];
+    let smallestOverlap = Infinity;
+    let smallestAxis = null;
+
+    for (const axis of axes) {
+      const projA = projectPolygon(polyA, axis);
+      const projB = projectPolygon(polyB, axis);
+      const overlap = Math.min(projA.max, projB.max) - Math.max(projA.min, projB.min);
+      if (overlap <= 0) return null;
+      if (overlap < smallestOverlap) {
+        smallestOverlap = overlap;
+        smallestAxis = axis;
+      }
+    }
+
+    const dir = (centerB.x - centerA.x) * smallestAxis.x + (centerB.y - centerA.y) * smallestAxis.y;
+    let axis = smallestAxis;
+    if (dir < 0) axis = { x: -smallestAxis.x, y: -smallestAxis.y };
+
+    return { x: axis.x * smallestOverlap, y: axis.y * smallestOverlap };
+  }
+
+  /* ---------------- DISEGNO ---------------- */
+  function drawCircle(t, fill) {
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, t.radius, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 1.5 / ratio;
+    ctx.stroke();
+  }
+
+  function drawScene() {
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+    // disegna sotto il rosso e sopra il nero (ordine a piacere)
+    drawCircle(redToken,   "red");
+    drawCircle(blackToken, "black");
+  }
+
+  /* ----------- COLLISIONI ---------------- */
+  function handleCollisionBlackPushRed() {
+    const blackPoly = getCirclePolygon(blackToken);
+    const redPoly   = getCirclePolygon(redToken);
+
+    const mtv = getMTV(
+      blackPoly,
+      redPoly,
+      { x: blackToken.x, y: blackToken.y },
+      { x: redToken.x,   y: redToken.y }
+    );
+
+    if (mtv) {
+      redToken.x += mtv.x;
+      redToken.y += mtv.y;
+      collisionByBlack = true;
+    }
+  }
+
+  function handleCollisionRedPushBlack() {
+    const blackPoly = getCirclePolygon(blackToken);
+    const redPoly   = getCirclePolygon(redToken);
+
+    const mtv = getMTV(
+      redPoly,
+      blackPoly,
+      { x: redToken.x,   y: redToken.y },
+      { x: blackToken.x, y: blackToken.y }
+    );
+
+    if (mtv) {
+      blackToken.x += mtv.x;
+      blackToken.y += mtv.y;
+    }
+  }
+
+  /* ---------------- HIT TEST ---------------- */
+  function insideCircle(x, y, c) { return distance(x, y, c.x, c.y) <= c.radius; }
+
+  function getPos(evt) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = WIDTH / rect.width;
+    const scaleY = HEIGHT / rect.height;
+
+    let clientX, clientY;
+    if (evt.touches && evt.touches[0]) {
+      clientX = evt.touches[0].clientX;
+      clientY = evt.touches[0].clientY;
+    } else {
+      clientX = evt.clientX;
+      clientY = evt.clientY;
+    }
+
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    };
+  }
+
+  /* ---------------- DRAG ---------------- */
+  function startDrag(evt) {
+    const pos = getPos(evt);
+
+    if (insideCircle(pos.x, pos.y, blackToken)) {
+      dragging = "black";
+      anyDrag = true;
+      draggedBlack = true;
+    }
+    else if (insideCircle(pos.x, pos.y, redToken)) {
+      dragging = "red";
+      anyDrag = true;
+      draggedRed = true;
+    }
+    else dragging = null;
+  }
+
+  function drag(evt) {
+    if (!dragging) return;
+    evt.preventDefault();
+
+    const pos = getPos(evt);
+
+    if (dragging === "black") {
+      blackToken.x = pos.x;
+      blackToken.y = pos.y;
+      handleCollisionBlackPushRed();
+    } else if (dragging === "red") {
+      redToken.x = pos.x;
+      redToken.y = pos.y;
+      handleCollisionRedPushBlack();
+    }
+
+    drawScene();
+  }
+
+  function stopDrag() { dragging = null; }
+
+  /* ---------------- AUDIO ---------------- */
+  function playFrase() {
+    audioFrase.currentTime = 0;
+    audioFrase.play().catch(() => {});
+  }
+
+  window.onload = () => {
+    drawScene();
+    playFrase();
+  };
+
+  /* ---------------- SALVATAGGIO ---------------- */
+  function salvaRispostaTerapeuta(dati) {
+    const key = "risposte_sessione";
+    const esistenti = JSON.parse(localStorage.getItem(key) || "[]");
+
+    const risposta = {
+      esercizio: dati.esercizio || "Frase finale 1",
+      categoria: dati.categoria || "Frasi finali",
+      stimolo:   dati.stimolo   || "Usa il cerchio nero per spostare il cerchio rosso",
+      ha_risposto: dati.ha_risposto,
+      risposta_grezza: dati.risposta_grezza,
+      descrizione_risposta: dati.descrizione_risposta,
+      corretta: dati.corretta,
+      punteggio: dati.punteggio,
+      ripetizioni_audio: 0,
+      timestamp: new Date().toISOString()
+    };
+
+    esistenti.push(risposta);
+    localStorage.setItem(key, JSON.stringify(esistenti));
+  }
+
+  function valutaESalva() {
+    let corretta        = false;
+    let punteggio       = 0;
+    let rispostaGrezza  = "";
+    let descrizioneResp = "";
+    let haRispostoFlag  = anyDrag;
+
+    const neroSiEMosso =
+      blackToken.x !== startBlack.x || blackToken.y !== startBlack.y;
+
+    const rossoSiEMosso =
+      redToken.x !== startRed.x || redToken.y !== startRed.y;
+
+    if (!anyDrag) {
+      corretta        = null;
+      punteggio       = 0;
+      rispostaGrezza  = "nessun movimento";
+      descrizioneResp = "Non ha mosso nessun gettone";
+    }
+    else if (collisionByBlack) {
+      corretta        = true;
+      punteggio       = 1;
+      rispostaGrezza  = "nero sposta rosso";
+      descrizioneResp = "Ha usato il cerchio nero per spostare il cerchio rosso";
+    }
+    else if (draggedRed && neroSiEMosso) {
+      corretta        = false;
+      punteggio       = 0;
+      rispostaGrezza  = "rosso sposta nero";
+      descrizioneResp = "Ha usato il cerchio rosso per spostare il cerchio nero";
+    }
+    else if (
+      (draggedBlack && !rossoSiEMosso) ||
+      (draggedRed && !neroSiEMosso)
+    ) {
+      corretta        = false;
+      punteggio       = 0;
+      rispostaGrezza  = "un gettone senza spostare l'altro";
+      descrizioneResp = "Ha spostato un gettone senza far spostare l’altro";
+    }
+    else {
+      corretta        = false;
+      punteggio       = 0;
+      rispostaGrezza  = "movimento non corretto";
+      descrizioneResp = "Ha mosso i gettoni senza rispettare la consegna";
+    }
+
+    salvaRispostaTerapeuta({
+      ha_risposto: haRispostoFlag,
+      risposta_grezza: rispostaGrezza,
+      descrizione_risposta: descrizioneResp,
+      corretta: corretta,
+      punteggio: punteggio,
+      ripetizioni_audio: 0
+    });
+  }
+
+  nextBtn.onclick = () => {
+    valutaESalva();
+    location.href = "index.html";
+  };
+
+  /* ---------------- EVENTI ---------------- */
+  canvas.addEventListener("mousedown", startDrag);
+  canvas.addEventListener("mousemove", drag);
+  window.addEventListener("mouseup", stopDrag);
+
+  canvas.addEventListener("touchstart", startDrag, { passive: false });
+  canvas.addEventListener("touchmove",  drag,      { passive: false });
+  canvas.addEventListener("touchend",   stopDrag);
+  canvas.addEventListener("touchcancel",stopDrag);
+
+  drawScene();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Types of Token</title>
+
+  <style>
+    *{ box-sizing:border-box; }
+
+    body{
+      font-family:sans-serif;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      min-height:100vh;
+      margin:0;
+      background:#fafafa;
+      padding:10px 0;
+    }
+
+    #container{
+      text-align:center;
+      max-width:900px;
+      width:100%;
+      padding:0 20px;
+    }
+
+    h1{
+      margin:0 0 20px;
+      font-size:34px;
+      font-weight:600;
+    }
+
+    /* ✅ riga bottoni */
+    .row{
+      display:flex;
+      justify-content:center;
+      margin-top:10px;
+    }
+
+    /* ✅ bottone NON largo, ma un po’ più grande di prima */
+    button{
+      padding:10px 20px;
+      font-size:18px;
+      border-radius:9px;
+      border:2px solid #333;
+      background:#f2f2f2;
+      cursor:pointer;
+      width:auto;
+      min-width:170px;
+      max-width:240px;
+    }
+
+    button:disabled{
+      opacity:.5;
+      cursor:not-allowed;
+    }
+
+    #box{
+      margin:20px auto 0;
+      padding:20px;
+      border:2px solid #333;
+      border-radius:14px;
+      background:#fff;
+      font-size:22px;
+      min-height:90px;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      white-space:pre-line;
+    }
+
+    #progress{
+      margin-top:12px;
+      font-size:16px;
+      color:#444;
+      display:none;
+    }
+  </style>
+</head>
+
+<body>
+<div id="container">
+  <h1 id="title">Types of Token</h1>
+
+  <div id="box"></div>
+  <div id="progress"></div>
+
+  <div class="row">
+    <button id="mainBtn"></button>
+  </div>
+</div>
+
+<script>
+/* =========================
+   CONFIG
+========================= */
+const DURATA_PAUSA_SEC = 120;
+const ATTESA_FINE_PRELIM_MS = 1000; // 1 secondo
+
+/* =========================
+   FILES
+========================= */
+
+// ✅ PRELIMINARE (Frasi attive)
+const eserciziPreliminari = [
+  "Frase attiva 1.html",
+  "Frase attiva 2.html",
+  "Frase attiva 3.html",
+  "Frase attiva 4.html",
+  "Frase attiva 5.html",
+  "Frase attiva 6.html",
+  "Frase attiva 7.html",
+  "Frase attiva 8.html",
+  "Frase attiva 9.html",
+  "Frase attiva 10.html"
+];
+
+// ✅ TEMPORALI (32 totali: 16 ordine uguale + 16 ordine diverso)
+const temporaliUguale = [
+  "Frase temporale 1_u.html",
+  "Frase temporale 2_u.html",
+  "Frase temporale 3_u.html",
+  "Frase temporale 4_u.html",
+  "Frase temporale 5_u.html",
+  "Frase temporale 6_u.html",
+  "Frase temporale 7_u.html",
+  "Frase temporale 8_u.html",
+  "Frase temporale 9_u.html",
+  "Frase temporale 10_u.html",
+  "Frase temporale 11_u.html",
+  "Frase temporale 12_u.html",
+  "Frase temporale 13_u.html",
+  "Frase temporale 14_u.html",
+  "Frase temporale 15_u.html",
+  "Frase temporale 16_u.html"
+];
+const temporaliDiverso = [
+  "Frase temporale 1_d.html",
+  "Frase temporale 2_d.html",
+  "Frase temporale 3_d.html",
+  "Frase temporale 4_d.html",
+  "Frase temporale 5_d.html",
+  "Frase temporale 6_d.html",
+  "Frase temporale 7_d.html",
+  "Frase temporale 8_d.html",
+  "Frase temporale 9_d.html",
+  "Frase temporale 10_d.html",
+  "Frase temporale 11_d.html",
+  "Frase temporale 12_d.html",
+  "Frase temporale 13_d.html",
+  "Frase temporale 14_d.html",
+  "Frase temporale 15_d.html",
+  "Frase temporale 16_d.html"
+];
+
+// ✅ CONDIZIONALI (16 totali: 8 rispettata + 8 non rispettata)
+const condRispettata = [
+  "Frase condizionale 1_si.html",
+  "Frase condizionale 2_si.html",
+  "Frase condizionale 3_si.html",
+  "Frase condizionale 4_si.html",
+  "Frase condizionale 5_si.html",
+  "Frase condizionale 6_si.html",
+  "Frase condizionale 7_si.html",
+  "Frase condizionale 8_si.html"
+];
+const condNonRispettata = [
+  "Frase condizionale 9_no.html",
+  "Frase condizionale 10_no.html",
+  "Frase condizionale 11_no.html",
+  "Frase condizionale 12_no.html",
+  "Frase condizionale 13_no.html",
+  "Frase condizionale 14_no.html",
+  "Frase condizionale 15_no.html",
+  "Frase condizionale 16_no.html"
+];
+
+// ✅ ALTRE CATEGORIE
+const causali = [
+  "Frase causale 1.html",
+  "Frase causale 2.html",
+  "Frase causale 3.html",
+  "Frase causale 4.html",
+  "Frase causale 5.html",
+  "Frase causale 6.html",
+  "Frase causale 7.html",
+  "Frase causale 8.html",
+  "Frase causale 9.html",
+  "Frase causale 10.html",
+  "Frase causale 11.html",
+  "Frase causale 12.html",
+  "Frase causale 13.html",
+  "Frase causale 14.html",
+  "Frase causale 15.html",
+  "Frase causale 16.html"
+];
+const passive = [
+  "Frase passiva 1.html",
+  "Frase passiva 2.html",
+  "Frase passiva 3.html",
+  "Frase passiva 4.html",
+  "Frase passiva 5.html",
+  "Frase passiva 6.html",
+  "Frase passiva 7.html",
+  "Frase passiva 8.html",
+  "Frase passiva 9.html",
+  "Frase passiva 10.html",
+  "Frase passiva 11.html",
+  "Frase passiva 12.html",
+  "Frase passiva 13.html",
+  "Frase passiva 14.html",
+  "Frase passiva 15.html",
+  "Frase passiva 16.html"
+];
+const finali = [
+  "Frase finale 1.html",
+  "Frase finale 2.html",
+  "Frase finale 3.html",
+  "Frase finale 4.html",
+  "Frase finale 5.html",
+  "Frase finale 6.html",
+  "Frase finale 7.html",
+  "Frase finale 8.html",
+  "Frase finale 9.html",
+  "Frase finale 10.html",
+  "Frase finale 11.html",
+  "Frase finale 12.html",
+  "Frase finale 13.html",
+  "Frase finale 14.html",
+  "Frase finale 15.html",
+  "Frase finale 16.html"
+];
+const interrogativeNegative = [
+  "Frase interrogativa negativa 1.html",
+  "Frase interrogativa negativa 2.html",
+  "Frase interrogativa negativa 3.html",
+  "Frase interrogativa negativa 4.html",
+  "Frase interrogativa negativa 5.html",
+  "Frase interrogativa negativa 6.html",
+  "Frase interrogativa negativa 7.html",
+  "Frase interrogativa negativa 8.html",
+  "Frase interrogativa negativa 9.html",
+  "Frase interrogativa negativa 10.html",
+  "Frase interrogativa negativa 11.html",
+  "Frase interrogativa negativa 12.html",
+  "Frase interrogativa negativa 13.html",
+  "Frase interrogativa negativa 14.html",
+  "Frase interrogativa negativa 15.html",
+  "Frase interrogativa negativa 16.html"
+];
+const causative = [
+  "Frase causativa 1.html",
+  "Frase causativa 2.html",
+  "Frase causativa 3.html",
+  "Frase causativa 4.html",
+  "Frase causativa 5.html",
+  "Frase causativa 6.html",
+  "Frase causativa 7.html",
+  "Frase causativa 8.html",
+  "Frase causativa 9.html",
+  "Frase causativa 10.html",
+  "Frase causativa 11.html",
+  "Frase causativa 12.html",
+  "Frase causativa 13.html",
+  "Frase causativa 14.html",
+  "Frase causativa 15.html",
+  "Frase causativa 16.html"
+];
+
+/* =========================
+   UTILS
+========================= */
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+function makeCycler(list){
+  let arr = list.slice();
+  shuffle(arr);
+  let idx = 0;
+  return function next(){
+    if(arr.length === 0) return null;
+    if(idx >= arr.length){
+      shuffle(arr);
+      idx = 0;
+    }
+    return arr[idx++];
+  };
+}
+
+/**
+ * Pattern per 2 TEMPORALI per blocco (U/D):
+ * In 16 blocchi, con k=2 => UU=2, DD=2, UD=6, DU=6 (usa 16U e 16D esatti).
+ * Vincolo: evita 3 pattern identici di fila (se possibile)
+ */
+function buildTemporalPairPatterns(blockCount, k=2){
+  const patterns = [];
+  for(let i=0;i<k;i++) patterns.push(["U","U"]);
+  for(let i=0;i<k;i++) patterns.push(["D","D"]);
+
+  const rest = blockCount - 2*k;
+  const half = Math.floor(rest/2);
+  for(let i=0;i<half;i++) patterns.push(["U","D"]);
+  for(let i=0;i<half;i++) patterns.push(["D","U"]);
+  while(patterns.length < blockCount) patterns.push(["U","D"]); // fallback
+
+  let tries = 160;
+  while(tries--){
+    const p = patterns.slice();
+    shuffle(p);
+    let ok = true;
+    for(let i=2;i<p.length;i++){
+      const a = p[i].join("");
+      const b = p[i-1].join("");
+      const c = p[i-2].join("");
+      if(a===b && b===c){ ok=false; break; }
+    }
+    if(ok) return p;
+  }
+  shuffle(patterns);
+  return patterns;
+}
+
+/**
+ * Pattern binario per condizionali lungo i blocchi:
+ * es. 8 "R" + 8 "N" in 16 blocchi, sparsi
+ * Vincolo: evita 3 uguali di fila (se possibile)
+ */
+function buildBinaryPatterns(blockCount, nA, labelA, labelB){
+  const arr = [];
+  for(let i=0;i<nA;i++) arr.push(labelA);
+  for(let i=nA;i<blockCount;i++) arr.push(labelB);
+
+  let tries = 200;
+  while(tries--){
+    const p = arr.slice();
+    shuffle(p);
+    let ok = true;
+    for(let i=2;i<p.length;i++){
+      if(p[i]===p[i-1] && p[i-1]===p[i-2]) { ok=false; break; }
+    }
+    if(ok) return p;
+  }
+  shuffle(arr);
+  return arr;
+}
+
+/**
+ * Shuffle con vincoli (per ogni blocco):
+ * - evita stessa categoria adiacente (se possibile)
+ * - le TEMPORALI non devono essere consecutive
+ * - evita che il primo del blocco ripeta la categoria dell'ultimo globale (se possibile)
+ */
+function arrangeWithConstraints(items, lastCatGlobal){
+  let tries = 260;
+  while(tries--){
+    const a = items.slice();
+    shuffle(a);
+
+    if(lastCatGlobal && a[0]?.cat === lastCatGlobal) continue;
+
+    let ok = true;
+    for(let i=1;i<a.length;i++){
+      if(a[i].cat === a[i-1].cat){ ok=false; break; }
+      if(a[i].cat === "temporale" && a[i-1].cat === "temporale"){ ok=false; break; }
+    }
+    if(ok) return a;
+  }
+
+  // fallback: shuffle semplice + swap per evitare temporali consecutive
+  const a = items.slice();
+  shuffle(a);
+  for(let i=1;i<a.length;i++){
+    if(a[i].cat === "temporale" && a[i-1].cat === "temporale"){
+      for(let j=i+1;j<a.length;j++){
+        if(a[j].cat !== "temporale"){
+          const tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+          break;
+        }
+      }
+    }
+  }
+  return a;
+}
+
+/* =========================
+   COSTRUZIONE PROVA VERA A BLOCCHI
+========================= */
+function buildSequenceByBlocks(blockCount){
+  // temporali
+  const nextTempU = makeCycler(temporaliUguale);
+  const nextTempD = makeCycler(temporaliDiverso);
+  const tempPatterns = buildTemporalPairPatterns(blockCount, /*k=*/2);
+
+  // condizionali: pattern per blocco (8R + 8N) e pescaggio da due mazzi
+  const r = condRispettata.slice(); shuffle(r);
+  const n = condNonRispettata.slice(); shuffle(n);
+  const condPattern = buildBinaryPatterns(blockCount, Math.floor(blockCount/2), "R", "N");
+
+  // altre categorie
+  const nextCaus   = makeCycler(causali);
+  const nextPass   = makeCycler(passive);
+  const nextFin    = makeCycler(finali);
+  const nextIntN   = makeCycler(interrogativeNegative);
+  const nextCausat = makeCycler(causative);
+
+  const seq = [];
+  let lastCatGlobal = null;
+
+  for(let b=0;b<blockCount;b++){
+    const blockItems = [];
+
+    // 2 temporali
+    const pat = tempPatterns[b];
+    const t1 = (pat[0]==="U") ? nextTempU() : nextTempD();
+    const t2 = (pat[1]==="U") ? nextTempU() : nextTempD();
+    blockItems.push({ file: t1, cat:"temporale" });
+    blockItems.push({ file: t2, cat:"temporale" });
+
+    // 1 condizionale per blocco
+    const whichCond = condPattern[b];
+    const condFile = (whichCond==="R") ? (r.pop() ?? null) : (n.pop() ?? null);
+    blockItems.push({ file: condFile, cat:"condizionale" });
+
+    // 1 per ciascuna altra categoria
+    blockItems.push({ file: nextCaus(),   cat:"causale" });
+    blockItems.push({ file: nextPass(),   cat:"passiva" });
+    blockItems.push({ file: nextFin(),    cat:"finale" });
+    blockItems.push({ file: nextIntN(),   cat:"interrogativa_negativa" });
+    blockItems.push({ file: nextCausat(), cat:"causativa" });
+
+    const clean = blockItems.filter(x => x.file);
+    const arranged = arrangeWithConstraints(clean, lastCatGlobal);
+
+    for(const it of arranged) seq.push(it.file);
+    lastCatGlobal = arranged[arranged.length-1]?.cat ?? lastCatGlobal;
+  }
+
+  return seq;
+}
+
+/* =========================
+   STORAGE KEYS
+========================= */
+const K = {
+  fase:"fase",
+  pre_i:"pre_i",
+  pre_seq:"pre_seq",
+  seq:"seq",
+  idx:"idx",
+  pausa:"pausa_fatta",
+  fine:"pausa_fine"
+};
+
+/* =========================
+   UI
+========================= */
+const titleEl = document.getElementById("title");
+const boxEl = document.getElementById("box");
+const progressEl = document.getElementById("progress");
+const btn = document.getElementById("mainBtn");
+
+let timer = null;
+let timeoutFinePre = null;
+
+function setTitle(t){ titleEl.textContent = t; }
+
+function resetUI(){
+  if(timer){ clearInterval(timer); timer=null; }
+  if(timeoutFinePre){ clearTimeout(timeoutFinePre); timeoutFinePre=null; }
+
+  boxEl.style.display="none";
+  progressEl.style.display="none";
+  btn.style.display="inline-block";
+  btn.disabled=false;
+  btn.onclick=null;
+}
+
+/* =========================
+   RESET SESSIONE
+========================= */
+function resetSession(){
+  localStorage.removeItem("risposte_sessione");
+  localStorage.removeItem("risposte_preliminare_sessione");
+  sessionStorage.clear();
+
+  const preSeq = shuffle(eserciziPreliminari.slice());
+  sessionStorage.setItem(K.pre_seq, JSON.stringify(preSeq));
+
+  sessionStorage.setItem(K.fase,"pre_start");
+}
+
+/* =========================
+   PRE START
+========================= */
+function renderPreStart(){
+  resetUI();
+  setTitle("Prova preliminare");
+  btn.textContent="Inizia";
+  btn.onclick=()=>{
+    sessionStorage.setItem(K.pre_i,"0");
+    sessionStorage.setItem(K.fase,"pre_run");
+    runPre();
+  };
+}
+
+/* =========================
+   PRE RUN
+========================= */
+function runPre(){
+  const seq = JSON.parse(sessionStorage.getItem(K.pre_seq) || "[]");
+  const i = parseInt(sessionStorage.getItem(K.pre_i)||"0",10);
+
+  if(i>=seq.length){
+    sessionStorage.setItem(K.fase,"pre_end");
+    renderPreEnd();
+    return;
+  }
+
+  sessionStorage.setItem(K.pre_i,String(i+1));
+  location.href = seq[i];
+}
+
+/* =========================
+   PRE END
+========================= */
+function renderPreEnd(){
+  resetUI();
+  setTitle("Fine prova preliminare");
+  btn.style.display="none";
+
+  timeoutFinePre = setTimeout(()=>{
+    const seq = buildSequenceByBlocks(16);
+
+    sessionStorage.setItem(K.seq, JSON.stringify(seq));
+    sessionStorage.setItem(K.idx, "0");
+    sessionStorage.setItem(K.pausa, "false");
+    sessionStorage.setItem(K.fase, "test_intro");
+    renderTestIntro();
+  }, ATTESA_FINE_PRELIM_MS);
+}
+
+/* =========================
+   TEST INTRO
+========================= */
+function renderTestIntro(){
+  resetUI();
+  setTitle("Types of Token");
+  btn.textContent="Inizia";
+  btn.onclick=()=>{
+    sessionStorage.setItem(K.fase,"test");
+    runTest();
+  };
+}
+
+/* =========================
+   PAUSA
+========================= */
+function renderPausa(){
+  resetUI();
+  setTitle("Pausa");
+
+  progressEl.style.display="block";
+  btn.style.display="none";
+
+  const fine = Date.now() + DURATA_PAUSA_SEC*1000;
+  sessionStorage.setItem(K.fine, String(fine));
+
+  timer = setInterval(()=>{
+    const rest = Math.max(0, Math.ceil((fine - Date.now())/1000));
+    progressEl.textContent = `${rest} s`;
+
+    if(rest <= 0){
+      clearInterval(timer);
+      timer = null;
+
+      setTitle("Fine pausa");
+      progressEl.textContent = "";
+
+      btn.style.display="inline-block";
+      btn.textContent = "Riprendi prova";
+      btn.onclick = ()=>{
+        sessionStorage.setItem(K.pausa, "true");
+        sessionStorage.setItem(K.fase, "test");
+        runTest();
+      };
+    }
+  }, 300);
+}
+
+/* =========================
+   TEST
+========================= */
+function runTest(){
+  const seq = JSON.parse(sessionStorage.getItem(K.seq)||"[]");
+  const idx = parseInt(sessionStorage.getItem(K.idx)||"0",10);
+
+  if(seq.length===0 || idx>=seq.length){
+    sessionStorage.setItem(K.fase,"test_end");
+    renderTestEnd();
+    return;
+  }
+
+  const metà = Math.floor(seq.length/2);
+  if(sessionStorage.getItem(K.pausa)!=="true" && idx>=metà){
+    sessionStorage.setItem(K.fase,"pause");
+    renderPausa();
+    return;
+  }
+
+  sessionStorage.setItem(K.idx,String(idx+1));
+  location.href = seq[idx];
+}
+
+/* =========================
+   TEST END
+========================= */
+function renderTestEnd(){
+  resetUI();
+  setTitle("Fine prova");
+  btn.textContent="Vedi risposte";
+  btn.onclick=()=>location.href="risposte.html";
+}
+
+/* =========================
+   START
+========================= */
+(function(){
+  const fase = sessionStorage.getItem(K.fase);
+
+  if(!fase){
+    resetSession();
+    renderPreStart();
+    return;
+  }
+
+  if(fase==="pre_start") renderPreStart();
+  else if(fase==="pre_run") runPre();
+  else if(fase==="pre_end") renderPreEnd();
+  else if(fase==="test_intro") renderTestIntro();
+  else if(fase==="test") runTest();
+  else if(fase==="pause") renderPausa();
+  else if(fase==="test_end") renderTestEnd();
+  else {
+    resetSession();
+    renderPreStart();
+  }
+})();
+</script>
+
+</body>
+</html>
+

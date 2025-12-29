@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Risposte prova preliminare</title>
+
+  <style>
+    body { 
+      font-family: sans-serif; 
+      padding: 20px; 
+      background: #fafafa; 
+    }
+
+    h1, h2 { margin-top: 0; }
+
+    .note { 
+      font-size: 14px; 
+      color: #444; 
+      margin-bottom: 10px; 
+    }
+
+    .summary { 
+      margin-bottom: 15px; 
+      font-size: 15px; 
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 15px;
+      background: #ffffff;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px 8px;
+      font-size: 14px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: #eee; }
+
+    .badge {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      display: inline-block;
+    }
+
+    .ok { background: #c8e6c9; border: 1px solid #388e3c; }
+    .no { background: #ffcdd2; border: 1px solid #c62828; }
+    .nr { background: #fff9c4; border: 1px solid #f9a825; }
+
+    /* ✅ BOTTONI COME PRIMA: orizzontali vicini */
+    .controls {
+      margin-top: 15px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    button {
+      padding: 8px 16px;
+      font-size: 14px;
+      border-radius: 9px;
+      border: 2px solid #333;
+      background: #f2f2f2;
+      cursor: pointer;
+    }
+
+    .category-summary { margin-top: 10px; font-size: 14px; }
+    .category-summary ul { margin: 5px 0 0 18px; padding: 0; }
+  </style>
+</head>
+
+<body>
+
+<h1>Risposte prova preliminare</h1>
+<div class="note">Questi punteggi sono della <strong>prova preliminare</strong> e non influenzano la prova.</div>
+
+<div class="summary" id="totale"></div>
+<div class="category-summary" id="perCategoria"></div>
+
+<table id="tabella">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Esercizio</th>
+      <th>Categoria</th>
+      <th>Stimolo / Dettagli</th>
+      <th>Risposta</th>
+      <th>Esito</th>
+      <th>Punti</th>
+      <th>Ora</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<div class="controls">
+  <button onclick="tornaIndex()">Torna all'Index</button>
+  <button onclick="cancella()">Cancella risposte</button>
+  <button onclick="scaricaCSV()">Scarica tabella</button>
+</div>
+
+<script>
+  const STORAGE_KEY = "risposte_preliminare_sessione";
+
+  const tbody     = document.querySelector("#tabella tbody");
+  const totaleDiv = document.getElementById("totale");
+  const perCatDiv = document.getElementById("perCategoria");
+
+  const risposte = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+
+  function formatEsito(r) {
+    const span = document.createElement("span");
+    span.classList.add("badge");
+
+    if (r.ha_risposto === false) {
+      span.textContent = "Non risponde";
+      span.classList.add("nr");
+    } else if (r.corretta === true) {
+      span.textContent = "Corretto";
+      span.classList.add("ok");
+    } else if (r.corretta === false) {
+      span.textContent = "Errato";
+      span.classList.add("no");
+    } else {
+      span.textContent = "-";
+    }
+    return span;
+  }
+
+  function popolaTabella() {
+    tbody.innerHTML = "";
+
+    if (!risposte.length) {
+      tbody.innerHTML = '<tr><td colspan="8">Nessun dato registrato per la prova preliminare.</td></tr>';
+      totaleDiv.textContent = "";
+      perCatDiv.textContent = "";
+      return;
+    }
+
+    let sommaPunti = 0;
+    const statsPerCategoria = {};
+
+    risposte.forEach((r, idx) => {
+      const punti = Number(r.punteggio || 0);
+      sommaPunti += punti;
+
+      const categoria = r.categoria || "assenza categoria";
+      if (!statsPerCategoria[categoria]) statsPerCategoria[categoria] = { punti: 0, totale: 0 };
+      statsPerCategoria[categoria].punti += punti;
+      statsPerCategoria[categoria].totale += 1;
+
+      const tr = document.createElement("tr");
+
+      const tdIdx = document.createElement("td");
+      tdIdx.textContent = idx + 1;
+      tr.appendChild(tdIdx);
+
+      const tdEs = document.createElement("td");
+      tdEs.textContent = r.esercizio || "";
+      tr.appendChild(tdEs);
+
+      const tdCat = document.createElement("td");
+      tdCat.textContent = categoria;
+      tr.appendChild(tdCat);
+
+      const tdStim = document.createElement("td");
+      tdStim.textContent = r.stimolo || "";
+      tr.appendChild(tdStim);
+
+      const tdRis = document.createElement("td");
+      if (r.ha_risposto === false) tdRis.textContent = "Nessuna risposta";
+      else tdRis.textContent = r.descrizione_risposta || r.risposta_grezza || "";
+      tr.appendChild(tdRis);
+
+      const tdEsito = document.createElement("td");
+      tdEsito.appendChild(formatEsito(r));
+      tr.appendChild(tdEsito);
+
+      const tdPt = document.createElement("td");
+      tdPt.textContent = punti;
+      tr.appendChild(tdPt);
+
+      const tdTs = document.createElement("td");
+      tdTs.textContent = r.timestamp ? new Date(r.timestamp).toLocaleTimeString() : "";
+      tr.appendChild(tdTs);
+
+      tbody.appendChild(tr);
+    });
+
+    totaleDiv.textContent = `Punteggio totale (preliminare): ${sommaPunti} / ${risposte.length}`;
+
+    let htmlCat = "<h2>Riepilogo per tipo di frase</h2><ul>";
+    Object.keys(statsPerCategoria).forEach(cat => {
+      const s = statsPerCategoria[cat];
+      htmlCat += `<li><strong>${cat}</strong>: ${s.punti} / ${s.totale}</li>`;
+    });
+    htmlCat += "</ul>";
+    perCatDiv.innerHTML = htmlCat;
+  }
+
+  function tornaIndex() {
+    location.href = "index.html";
+  }
+
+  function cancella() {
+    if (confirm("Vuoi cancellare tutte le risposte della prova preliminare?")) {
+      localStorage.removeItem(STORAGE_KEY);
+      location.reload();
+    }
+  }
+
+  function scaricaCSV() {
+    if (!risposte.length) {
+      alert("Nessuna risposta da esportare.");
+      return;
+    }
+
+    const header = [
+      "N","Esercizio","Categoria","Stimolo","Ha_risposto","Risposta","Corretta","Punteggio","Timestamp"
+    ];
+
+    const rows = [header];
+
+    risposte.forEach((r, idx) => {
+      rows.push([
+        idx + 1,
+        r.esercizio || "",
+        r.categoria || "",
+        r.stimolo || "",
+        r.ha_risposto === true ? "sì" : (r.ha_risposto === false ? "no" : ""),
+        (r.descrizione_risposta || r.risposta_grezza || ""),
+        r.corretta === true ? "corretto" : (r.corretta === false ? "errato" : ""),
+        r.punteggio != null ? r.punteggio : "",
+        r.timestamp || ""
+      ]);
+    });
+
+    const csv = rows
+      .map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    const oggi = new Date();
+    a.download = `risposte_prova_preliminare_${oggi.toISOString().slice(0,10)}.csv`;
+    a.click();
+
+    URL.revokeObjectURL(url);
+  }
+
+  popolaTabella();
+</script>
+
+</body>
+</html>
+
+
+
+

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>Frase attiva 3</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: white;
+      font-family: sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .wrapper {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .screen {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      padding: 10px 0;
+    }
+
+    .media-slot {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .media-wrap {
+      position: relative;
+      display: inline-block;
+      line-height: 0;
+    }
+
+    .media {
+      max-width: 80vw;
+      max-height: 80vh;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      display: block;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-drag: none;
+      touch-action: manipulation;
+    }
+
+    .fade-spot {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 0;
+      height: 0;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      background: rgba(255,255,255,0.55);
+      -webkit-mask-image: radial-gradient(ellipse at center,
+        rgba(0,0,0,1) 0 82%,
+        rgba(0,0,0,0) 98%);
+              mask-image: radial-gradient(ellipse at center,
+        rgba(0,0,0,1) 0 82%,
+        rgba(0,0,0,0) 98%);
+    }
+
+    /* ✅ BOTTONE (via di mezzo, stile unico) */
+    .buttons-row{
+      display:flex;
+      justify-content:center;
+      width:100%;
+      max-width:380px;
+      margin-top:14px;
+    }
+
+    button{
+      width:100%;
+      padding:11px 22px;
+      font-size:17.5px;
+      border-radius:9px;
+      border:2px solid #333;
+      background:#f2f2f2;
+      cursor:pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrapper">
+    <div class="screen">
+      <div class="media-slot">
+        <div class="media-wrap">
+          <img id="sceltaImg" class="media" alt="Immagine esercizio" />
+          <div id="fadeSpot" class="fade-spot" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <div class="buttons-row">
+        <button id="nextBtn">Prossima frase</button>
+      </div>
+
+      <audio id="audioStimolo">
+        <source id="audioSrc" type="audio/mp4" />
+      </audio>
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================
+       🔧 PARAMETRI DA CAMBIARE
+       - FASE: "prova preliminare" oppure "prova"
+       - INCLUDE_IN_PUNTEGGIO: false (preliminare) / true (prova)
+       - VALUTA_PRELIMINARE: se true salva corretto/sbagliato e punti anche in preliminare
+    ========================================================= */
+    const ESERCIZIO = "Frase attiva 3";
+    const CATEGORIA = "Frasi attive";
+    const STIMOLO   = "Tocca il triangolo nero";
+
+    const FASE = "prova preliminare";      // "prova preliminare" | "prova"
+    const INCLUDE_IN_PUNTEGGIO = false;    // false preliminare | true prova
+    const VALUTA_PRELIMINARE = true;       // ✅ salva corretto/punti anche in preliminare
+
+    const IMG_SRC   = "../immagini/Frase attiva 3.png";
+    const AUDIO_SRC = "../audio/Frase attiva 3.m4a";
+
+    const nomiGettoni = {
+      alto_sx:  "cerchio nero",
+      alto_dx:  "triangolo bianco",
+      basso_sx: "triangolo nero",
+      basso_dx: "quadrato rosso"
+    };
+
+    const GETTONE_CORRETTO = "triangolo nero";
+    /* ========================================================= */
+
+    // ✅ Salvataggio separato per non confondere terapista
+    const STORAGE_KEY = (FASE === "prova preliminare")
+      ? "risposte_preliminare_sessione"
+      : "risposte_sessione";
+
+    const img      = document.getElementById("sceltaImg");
+    const nextBtn  = document.getElementById("nextBtn");
+    const audio    = document.getElementById("audioStimolo");
+    const audioSrc = document.getElementById("audioSrc");
+    const fadeSpot = document.getElementById("fadeSpot");
+
+    let haToccato = false;
+    let haRisposto = false;
+    let gettoneScelto = null;
+
+    img.src = IMG_SRC;
+    audioSrc.src = AUDIO_SRC;
+    audio.load();
+
+    window.addEventListener("load", () => {
+      audio.play().catch(() => {});
+    });
+
+    function calcolaQuadranteClick(evt) {
+      const r = img.getBoundingClientRect();
+      const x = evt.clientX - r.left;
+      const y = evt.clientY - r.top;
+      if (y < r.height / 2) return (x < r.width / 2) ? "alto_sx" : "alto_dx";
+      return (x < r.width / 2) ? "basso_sx" : "basso_dx";
+    }
+
+    function fissaSpot(quadrante) {
+      const r = img.getBoundingClientRect();
+      const cx = quadrante.endsWith("sx") ? r.width * 0.25 : r.width * 0.75;
+      const cy = quadrante.startsWith("alto") ? r.height * 0.25 : r.height * 0.75;
+      const size = Math.max(150, Math.min(320, Math.min(r.width, r.height) * 0.52));
+      fadeSpot.style.width  = size + "px";
+      fadeSpot.style.height = size + "px";
+      fadeSpot.style.left   = cx + "px";
+      fadeSpot.style.top    = cy + "px";
+    }
+
+    img.addEventListener("click", (e) => {
+      if (haToccato) return;
+
+      const q = calcolaQuadranteClick(e);
+      fissaSpot(q);
+
+      haToccato = true;
+      haRisposto = true;
+      gettoneScelto = nomiGettoni[q] || null;
+    });
+
+    function salva(record) {
+      const arr = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      arr.push(record);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+    }
+
+    function valutaESalva() {
+      const rispostaTxt = haRisposto ? (gettoneScelto || "tocco_non_mappato") : "nessun gettone";
+
+      const base = {
+        esercizio: ESERCIZIO,
+        categoria: CATEGORIA,
+        stimolo: STIMOLO,
+
+        fase: FASE,
+        include_in_punteggio: INCLUDE_IN_PUNTEGGIO,
+
+        ha_risposto: haRisposto,
+        risposta_grezza: rispostaTxt,
+        descrizione_risposta: haRisposto
+          ? ("Ha toccato il " + rispostaTxt)
+          : "Non ha toccato alcun gettone",
+
+        timestamp: new Date().toISOString()
+      };
+
+      // ✅ Valutazione:
+      // - sempre in PROVA
+      // - in PRELIMINARE solo se VALUTA_PRELIMINARE=true
+      const devoValutare = INCLUDE_IN_PUNTEGGIO || (FASE === "prova preliminare" && VALUTA_PRELIMINARE);
+
+      if (!devoValutare) {
+        salva(base);
+        return;
+      }
+
+      const corretta = haRisposto && gettoneScelto === GETTONE_CORRETTO;
+      salva({ ...base, corretta: corretta, punteggio: corretta ? 1 : 0 });
+    }
+
+    nextBtn.addEventListener("click", () => {
+      valutaESalva();
+      location.href = "index.html";
+    });
+  </script>
+</body>
+</html>
+
+
+
+
+
