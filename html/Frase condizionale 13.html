@@ -98,6 +98,22 @@
       background:#f2f2f2;
       cursor:pointer;
     }
+  
+    /* IPAD_CSS */
+    /* ✅ iPad: niente zoom con doppio tocco, niente menu "Salva immagine" con il tocco lungo,
+       niente selezione del testo o riquadro grigio quando si tocca */
+    html, body {
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-text-size-adjust: 100%;
+    }
+    img, canvas, video {
+      -webkit-touch-callout: none;
+      -webkit-user-drag: none;
+    }
+    body { min-height: 100dvh; }   /* altezza reale dello schermo (senza barre di Safari) */
   </style>
 </head>
 
@@ -137,6 +153,7 @@ function vaiAllaProssima() {
   location.href = "index.html";
 }
 /* RT_ONSET_PATCH */
+/* RT_NONRISPETTATA_PATCH */
 /* ASCOLTA_PATCH */
 /* RT_PATCH_APPLIED */
 /* =========================================================
@@ -297,6 +314,16 @@ function salva(record) {
 }
 
 function valutaESalva() {
+  // ✅ condizione non rispettata: se NON ha toccato, l'RT arriva fino a "Prossima frase"
+  let tipoRt = haRisposto ? "risposta" : null;
+  if (!haRisposto && tAudioInizio != null) {
+    tempoDaInizioAudioMs = Math.round(performance.now() - tAudioInizio);
+    tempoReazioneMs = isFinite(durataFraseSec())
+      ? Math.round(tempoDaInizioAudioMs - durataFraseSec() * 1000)
+      : null;
+    tipoRt = "prossima_frase";
+  }
+
   const rispostaTxt = haRisposto
     ? (gettoneScelto || "tocco_non_mappato")
     : "nessun gettone";
@@ -316,6 +343,7 @@ function valutaESalva() {
       : "Non ha toccato alcun gettone",
 
     tempo_reazione_ms: tempoReazioneMs,   // dalla fine audio (negativo = anticipato)
+    tipo_rt: tipoRt,   // "risposta" = tocco, "prossima_frase" = nessun tocco
     tempo_da_inizio_audio_ms: tempoDaInizioAudioMs,
     durata_audio_ms: isFinite(durataFraseSec()) ? Math.round(durataFraseSec() * 1000) : null,
     audio_partito: tAudioInizio !== null,

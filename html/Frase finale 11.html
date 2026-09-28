@@ -14,6 +14,22 @@
     canvas { border:none !important; touch-action:none; max-width:80vw; max-height:80vh; width:auto; height:auto; display:block; }
     .buttons-row{ display:flex; justify-content:center; width:100%; max-width:380px; margin-top:14px; }
     button{ width:100%; padding:11px 22px; font-size:17.5px; border-radius:9px; border:2px solid #333; background:#f2f2f2; cursor:pointer; }
+  
+    /* IPAD_CSS */
+    /* ✅ iPad: niente zoom con doppio tocco, niente menu "Salva immagine" con il tocco lungo,
+       niente selezione del testo o riquadro grigio quando si tocca */
+    html, body {
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-text-size-adjust: 100%;
+    }
+    img, canvas, video {
+      -webkit-touch-callout: none;
+      -webkit-user-drag: none;
+    }
+    body { min-height: 100dvh; }   /* altezza reale dello schermo (senza barre di Safari) */
   </style>
 </head>
 
