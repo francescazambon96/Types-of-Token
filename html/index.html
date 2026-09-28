@@ -2,7 +2,12 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <!-- ✅ aperto dalla schermata Home dell'iPad: a schermo intero, senza barre di Safari -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Types of Token" />
   <title>Types of Token</title>
 
   <style>
@@ -176,6 +181,17 @@
       align-self:center;
       min-width:0;
     }
+  
+    /* ✅ iPad: niente zoom con doppio tocco, niente menu del tocco lungo, niente selezione */
+    html, body{
+      touch-action:manipulation;
+      -webkit-user-select:none;
+      user-select:none;
+      -webkit-tap-highlight-color:transparent;
+      -webkit-text-size-adjust:100%;
+    }
+    input{ -webkit-user-select:text; user-select:text; }   /* i campi dei dati restano scrivibili */
+    img, video{ -webkit-touch-callout:none; }
   </style>
 </head>
 

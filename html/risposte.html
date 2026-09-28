@@ -266,7 +266,7 @@ function costruisciRisultati() {
   const info = getPartecipanteInfo();
   const { numero, gruppo, sesso, eta, scolarita } = info;
 
-  const rows = [["Fase","N","Esercizio","Categoria","Stimolo","Ha_risposto","Risposta","Corretta","Punteggio","Tempo_reazione_ms","Tempo_da_inizio_audio_ms","Durata_audio_ms","Audio_partito","Timestamp","Partecipante","Gruppo","Sesso","Eta","Scolarita"]];
+  const rows = [["Fase","N","Esercizio","Categoria","Stimolo","Ha_risposto","Risposta","Corretta","Punteggio","Tempo_reazione_ms","Tipo_RT","Tempo_da_inizio_audio_ms","Durata_audio_ms","Audio_partito","Timestamp","Partecipante","Gruppo","Sesso","Eta","Scolarita"]];
   const contatori = {};
   tutte.forEach(r => {
     contatori[r._fase] = (contatori[r._fase] || 0) + 1;
@@ -281,6 +281,7 @@ function costruisciRisultati() {
       r.corretta === true ? "corretto" : (r.corretta === false ? "errato" : ""),
       r.punteggio != null ? r.punteggio : "",
       r.tempo_reazione_ms != null ? r.tempo_reazione_ms : "",
+      r.tipo_rt || (r.tempo_reazione_ms != null ? "risposta" : ""),
       r.tempo_da_inizio_audio_ms != null ? r.tempo_da_inizio_audio_ms : "",
       r.durata_audio_ms != null ? r.durata_audio_ms : "",
       r.audio_partito === true ? "sì" : (r.audio_partito === false ? "no" : ""),
