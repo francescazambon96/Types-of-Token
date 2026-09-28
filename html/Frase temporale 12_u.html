@@ -78,7 +78,7 @@
         rgba(0,0,0,0) 98%);
     }
 
-    /* ✅ BOTTONE (via di mezzo, stile unico) */
+     /* ✅ BOTTONE (via di mezzo, stile unico) */
     .buttons-row{
       display:flex;
       justify-content:center;
@@ -123,12 +123,14 @@
   </div>
 
 <script>
+/* RT_ONSET_PATCH */
+/* RT_PATCH_APPLIED */
 /* =========================================================
    🔧 PARAMETRI DA CAMBIARE (PROVA VERA)
 ========================================================= */
 const ESERCIZIO = "Frase temporale 12 (ordine lineare = ordine eventi)";
 const CATEGORIA = "Frasi temporali (ordine lineare = ordine eventi)";
-const STIMOLO   = "Dopo aver toccato il cerchio giallo, tocca il triangolo verde";
+const STIMOLO   = "Dopo aver toccato il triangolo nero, tocca il cerchio bianco";
 
 const FASE = "prova";
 const INCLUDE_IN_PUNTEGGIO = true;
@@ -138,12 +140,12 @@ const AUDIO_SRC = "../audio/Frase temporale 12_u.m4a";
 
 const nomiGettoni = {
   alto_sx:  "triangolo verde",
-  alto_dx:  "triangolo nero",
-  basso_sx: "cerchio bianco",
-  basso_dx: "cerchio giallo"
+  alto_dx:  "cerchio bianco",
+  basso_sx:  "triangolo nero",
+  basso_dx:  "cerchio giallo"
 };
 
-const GETTONI_CORRETTI = ["cerchio giallo", "triangolo verde"];
+const GETTONI_CORRETTI = ["triangolo nero", "cerchio bianco"];
 /* ========================================================= */
 
 // salva insieme alle altre della prova
@@ -164,6 +166,13 @@ window.addEventListener("load", () => {
   audio.play().catch(() => {});
 });
 
+// ✅ RT: il cronometro parte quando l'audio inizia davvero
+let tAudioInizio = null;
+let tempoDaInizioAudioMs = null;
+audio.addEventListener("playing", () => {
+  if (tAudioInizio === null) tAudioInizio = performance.now();
+});
+
 /* =========================
    STATO (2 tocchi)
 ========================= */
@@ -172,6 +181,9 @@ let haRisposto = false;
 
 let q1 = null, q2 = null;
 let scelta1 = null, scelta2 = null;
+
+let tStimoloInizio = null;   // istante in cui finisce l'audio
+let tempoReazioneMs = null;  // tempo di reazione: dal fine audio al PRIMO tocco
 
 /* =========================
    QUADRANTE + SPOT
@@ -208,6 +220,17 @@ function descrizioneDueTocchi(t1, t2){
 ========================= */
 img.addEventListener("pointerdown", (e) => {
   if (tocchi >= 2) return;
+
+  // ✅ calcola il tempo di reazione solo al PRIMO tocco
+  if (tocchi === 0) {
+    if (tAudioInizio != null) {
+      tempoDaInizioAudioMs = Math.round(performance.now() - tAudioInizio);
+      // dalla FINE della frase (negativo = ha risposto prima che finisse)
+      tempoReazioneMs = isFinite(audio.duration)
+        ? Math.round(tempoDaInizioAudioMs - audio.duration * 1000)
+        : null;
+    }
+  }
 
   const q = calcolaQuadrante(e);
   const nome = nomiGettoni[q] || null;
@@ -255,6 +278,11 @@ function valutaESalva() {
     risposta_grezza: rispostaTxt,
     descrizione_risposta: descrizioneDueTocchi(t1, t2),
 
+    tempo_reazione_ms: tempoReazioneMs,   // dalla fine audio (negativo = anticipato)
+    tempo_da_inizio_audio_ms: tempoDaInizioAudioMs,
+    durata_audio_ms: isFinite(audio.duration) ? Math.round(audio.duration * 1000) : null,
+    audio_partito: tAudioInizio !== null,
+
     dettagli_tocchi: {
       tocchi_effettuati: tocchi,
       quadrante1: q1, scelta1: scelta1,
@@ -275,6 +303,8 @@ function valutaESalva() {
    PROSSIMA FRASE
 ========================= */
 nextBtn.addEventListener("click", () => {
+  if (nextBtn.disabled) return;
+  nextBtn.disabled = true;   // evita doppi salvataggi
   valutaESalva();
   location.href = "index.html";
 });

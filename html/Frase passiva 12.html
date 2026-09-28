@@ -146,12 +146,13 @@
   </div>
 
   <script>
+/* RT_PATCH_APPLIED */
     /* =========================================================
        🔧 PARAMETRI DA CAMBIARE (come Frase attiva)
     ========================================================= */
     const ESERCIZIO = "Frase passiva 12";
     const CATEGORIA = "Frasi passive";
-    const STIMOLO   = "Quale cerchio è stato toccato da un triangolo verde?";
+    const STIMOLO   = "Quale cerchio è stato toccato da un quadrato nero?";
 
     const FASE = "prova";                    // "prova preliminare" | "prova"
     const INCLUDE_IN_PUNTEGGIO = true;       // false preliminare | true prova
@@ -162,13 +163,13 @@
 
     // Mappa quadranti → etichette
     const nomiGettoni = {
-      alto_sx:  "cerchio bianco",
-      alto_dx:  "triangolo verde sopra",
-      basso_sx: "cerchio nero",
-      basso_dx: "triangolo verde sotto"
+      alto_sx:  "cerchio verde",
+      alto_dx:  "quadrato nero sopra",
+      basso_sx: "cerchio giallo",
+      basso_dx: "quadrato nero sotto"
     };
 
-    const GETTONE_CORRETTO = "cerchio nero";
+    const GETTONE_CORRETTO = "cerchio verde";
     /* ========================================================= */
 
     // ✅ Salvataggio separato (come Frase attiva)
@@ -189,6 +190,8 @@
     let haToccato = false;
     let haRisposto = false;
     let gettoneScelto = null;
+    let tStimoloInizio = null;   // istante in cui è possibile rispondere
+    let tempoReazioneMs = null;  // tempo di reazione calcolato
 
     // carica media
     videoSrc.src = VIDEO_SRC;
@@ -210,6 +213,10 @@
       setTimeout(() => {
         screen1.style.display = "none";
         screen2.style.display = "flex";
+        // ✅ RT: parte quando l'immagine e' effettivamente disegnata
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          tStimoloInizio = performance.now();
+        }));
       }, 150);
     });
 
@@ -238,6 +245,11 @@
     // pointerdown = meglio su tablet rispetto a click
     img.addEventListener("pointerdown", (e) => {
       if (haToccato) return;
+
+      // ✅ calcola il tempo di reazione PRIMA di qualunque altra cosa
+      tempoReazioneMs = (tStimoloInizio != null)
+        ? Math.round(performance.now() - tStimoloInizio)
+        : null;
 
       const q = calcolaQuadrante(e);
       fissaSpot(q);
@@ -275,6 +287,8 @@
           ? ("Ha toccato il " + rispostaTxt)
           : "Non ha toccato alcun gettone",
 
+        tempo_reazione_ms: tempoReazioneMs,
+
         timestamp: new Date().toISOString()
       };
 
@@ -293,6 +307,8 @@
        PROSSIMA FRASE
     ------------------------- */
     nextBtn.addEventListener("click", () => {
+      if (nextBtn.disabled) return;
+      nextBtn.disabled = true;   // evita doppi salvataggi
       valutaESalva();
       location.href = "index.html";
     });

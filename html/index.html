@@ -36,7 +36,7 @@
     .row{
       display:flex;
       justify-content:center;
-      margin-top:10px;
+      margin-top:26px;
     }
 
     /* ✅ bottone NON largo, ma un po’ più grande di prima */
@@ -66,9 +66,16 @@
       font-size:22px;
       min-height:90px;
       display:none;
-      align-items:center;
+      flex-direction:column;
+      align-items:stretch;
       justify-content:center;
+      gap:18px;
       white-space:pre-line;
+    }
+
+    #box p{
+      margin:0;
+      text-align:center;
     }
 
     #progress{
@@ -77,6 +84,86 @@
       color:#444;
       display:none;
     }
+
+    #box{
+      text-align:left;
+      line-height:1.5;
+    }
+
+    #setupBox{
+      margin:20px auto 0;
+      padding:24px;
+      border:2px solid #333;
+      border-radius:14px;
+      background:#fff;
+      max-width:420px;
+      text-align:left;
+      display:none;
+    }
+
+    #setupBox label{
+      display:block;
+      font-size:16px;
+      font-weight:600;
+      margin-bottom:6px;
+    }
+
+    #setupBox input[type="number"],
+    #setupBox input[type="text"]{
+      width:100%;
+      padding:10px;
+      font-size:18px;
+      border:2px solid #333;
+      border-radius:8px;
+      margin-bottom:18px;
+      box-sizing:border-box;
+    }
+
+    .campo-row{
+      display:flex;
+      gap:16px;
+    }
+
+    .campo-row > div{
+      flex:1;
+    }
+
+    .gruppo-row{
+      display:flex;
+      gap:24px;
+      margin-bottom:18px;
+    }
+
+    .gruppo-row label{
+      display:flex;
+      align-items:center;
+      gap:6px;
+      font-weight:400;
+      font-size:17px;
+      margin-bottom:0;
+    }
+
+    #setupError{
+      color:#b00020;
+      font-size:15px;
+      margin-bottom:12px;
+      display:none;
+    }
+
+    #playAudioBtn{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:0;
+      width:52px;
+      height:52px;
+      border-radius:50%;
+      border:2px solid #333;
+      background:#f2f2f2;
+      cursor:pointer;
+      align-self:center;
+      min-width:0;
+    }
   </style>
 </head>
 
@@ -84,12 +171,56 @@
 <div id="container">
   <h1 id="title">Types of Token</h1>
 
-  <div id="box"></div>
-  <div id="progress"></div>
+  <div id="setupBox">
+    <div id="setupError"></div>
+
+    <label for="numPartecipante">Numero partecipante</label>
+    <input type="text" id="numPartecipante" inputmode="numeric" placeholder="Es. 1">
+
+    <label>Gruppo</label>
+    <div class="gruppo-row">
+      <label><input type="radio" name="gruppo" value="afasia"> Afasia</label>
+      <label><input type="radio" name="gruppo" value="controllo"> Controllo</label>
+    </div>
+
+    <label>Sesso</label>
+    <div class="gruppo-row">
+      <label><input type="radio" name="sesso" value="M"> Maschio</label>
+      <label><input type="radio" name="sesso" value="F"> Femmina</label>
+    </div>
+
+    <div class="campo-row">
+      <div>
+        <label for="eta">Età</label>
+        <input type="text" id="eta" inputmode="numeric" placeholder="Es. 68">
+      </div>
+      <div>
+        <label for="scolarita">Anni di scolarità</label>
+        <input type="text" id="scolarita" inputmode="numeric" placeholder="Es. 13">
+      </div>
+    </div>
+  </div>
+
+  <div id="box">
+    <p id="boxText"></p>
+    <button id="playAudioBtn" type="button" aria-label="Ascolta le istruzioni">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+        <path d="M3 9v6h4l5 5V4L7 9H3z"/>
+        <path d="M16.3 12c0-1.65-0.95-3.07-2.3-3.76v7.51c1.35-0.69 2.3-2.1 2.3-3.75z"/>
+        <path d="M14 4.3v2.05c2.6 0.82 4.5 3.26 4.5 5.65s-1.9 4.83-4.5 5.65v2.05c3.7-0.86 6.5-4.17 6.5-7.7s-2.8-6.84-6.5-7.7z"/>
+      </svg>
+    </button>
+  </div>
+
+  <audio id="audioIstruzioni" style="display:none">
+    <source src="../audio/Istruzioni.m4a" type="audio/mp4">
+  </audio>
 
   <div class="row">
     <button id="mainBtn"></button>
   </div>
+
+  <div id="progress"></div>
 </div>
 
 <script>
@@ -98,6 +229,11 @@
 ========================= */
 const DURATA_PAUSA_SEC = 120;
 const ATTESA_FINE_PRELIM_MS = 1000; // 1 secondo
+
+// ✅ Frasi causali, causative, passive e interrogative negative con lo STESSO NUMERO
+//    usano la stessa immagine (es. "Frase causale 5", "Frase passiva 5" -> 5.png).
+//    Se true: mai due frasi con la stessa immagine nello stesso blocco o di fila.
+const EVITA_STESSA_IMMAGINE = true;
 
 /* =========================
    FILES
@@ -157,24 +293,24 @@ const temporaliDiverso = [
 
 // ✅ CONDIZIONALI (16 totali: 8 rispettata + 8 non rispettata)
 const condRispettata = [
-  "Frase condizionale 1_si.html",
-  "Frase condizionale 2_si.html",
-  "Frase condizionale 3_si.html",
-  "Frase condizionale 4_si.html",
-  "Frase condizionale 5_si.html",
-  "Frase condizionale 6_si.html",
-  "Frase condizionale 7_si.html",
-  "Frase condizionale 8_si.html"
+  "Frase condizionale 1.html",
+  "Frase condizionale 2.html",
+  "Frase condizionale 3.html",
+  "Frase condizionale 4.html",
+  "Frase condizionale 5.html",
+  "Frase condizionale 6.html",
+  "Frase condizionale 7.html",
+  "Frase condizionale 8.html"
 ];
 const condNonRispettata = [
-  "Frase condizionale 9_no.html",
-  "Frase condizionale 10_no.html",
-  "Frase condizionale 11_no.html",
-  "Frase condizionale 12_no.html",
-  "Frase condizionale 13_no.html",
-  "Frase condizionale 14_no.html",
-  "Frase condizionale 15_no.html",
-  "Frase condizionale 16_no.html"
+  "Frase condizionale 9.html",
+  "Frase condizionale 10.html",
+  "Frase condizionale 11.html",
+  "Frase condizionale 12.html",
+  "Frase condizionale 13.html",
+  "Frase condizionale 14.html",
+  "Frase condizionale 15.html",
+  "Frase condizionale 16.html"
 ];
 
 // ✅ ALTRE CATEGORIE
@@ -352,18 +488,52 @@ function buildBinaryPatterns(blockCount, nA, labelA, labelB){
 }
 
 /**
+ * Chiave immagine: stesse immagini per causali/causative/passive/interrogative negative
+ * con lo stesso numero. Per le altre categorie restituisce null.
+ */
+function chiaveImmagine(file){
+  const m = /^Frase (causale|causativa|passiva|interrogativa negativa) (\d+)\.html$/.exec(file || "");
+  return m ? "img" + m[2] : null;
+}
+
+/**
+ * Per ogni lista (una per categoria) sceglie un ordine casuale lungo blockCount
+ * tale che, in ogni blocco, nessuna immagine compaia in piu' di una categoria.
+ * Ogni file viene usato una sola volta.
+ */
+function buildImageSafeOrders(lists, blockCount){
+  const risultati = [];
+  const usate = Array.from({length: blockCount}, () => new Set());
+
+  for(const list of lists){
+    let scelta = null;
+    for(let t=0; t<20000 && !scelta; t++){
+      const p = shuffle(list.slice()).slice(0, blockCount);
+      if(!EVITA_STESSA_IMMAGINE || p.every((f,b) => !usate[b].has(chiaveImmagine(f)))) scelta = p;
+    }
+    if(!scelta) scelta = shuffle(list.slice()).slice(0, blockCount); // fallback (non dovrebbe servire)
+
+    scelta.forEach((f,b) => { const k = chiaveImmagine(f); if(k) usate[b].add(k); });
+    risultati.push(scelta);
+  }
+  return risultati;
+}
+
+/**
  * Shuffle con vincoli (per ogni blocco):
  * - evita stessa categoria adiacente (se possibile)
  * - le TEMPORALI non devono essere consecutive
  * - evita che il primo del blocco ripeta la categoria dell'ultimo globale (se possibile)
+ * - evita che il primo del blocco abbia la stessa immagine dell'ultimo globale
  */
-function arrangeWithConstraints(items, lastCatGlobal){
+function arrangeWithConstraints(items, lastCatGlobal, lastImgGlobal){
   let tries = 260;
   while(tries--){
     const a = items.slice();
     shuffle(a);
 
     if(lastCatGlobal && a[0]?.cat === lastCatGlobal) continue;
+    if(EVITA_STESSA_IMMAGINE && lastImgGlobal && chiaveImmagine(a[0]?.file) === lastImgGlobal) continue;
 
     let ok = true;
     for(let i=1;i<a.length;i++){
@@ -404,14 +574,15 @@ function buildSequenceByBlocks(blockCount){
   const condPattern = buildBinaryPatterns(blockCount, Math.floor(blockCount/2), "R", "N");
 
   // altre categorie
-  const nextCaus   = makeCycler(causali);
-  const nextPass   = makeCycler(passive);
+  // ✅ le 4 categorie con video condividono le immagini: ordini costruiti insieme
+  const [ordCaus, ordPass, ordIntN, ordCausat] = buildImageSafeOrders(
+    [causali, passive, interrogativeNegative, causative], blockCount
+  );
   const nextFin    = makeCycler(finali);
-  const nextIntN   = makeCycler(interrogativeNegative);
-  const nextCausat = makeCycler(causative);
 
   const seq = [];
   let lastCatGlobal = null;
+  let lastImgGlobal = null;
 
   for(let b=0;b<blockCount;b++){
     const blockItems = [];
@@ -429,17 +600,18 @@ function buildSequenceByBlocks(blockCount){
     blockItems.push({ file: condFile, cat:"condizionale" });
 
     // 1 per ciascuna altra categoria
-    blockItems.push({ file: nextCaus(),   cat:"causale" });
-    blockItems.push({ file: nextPass(),   cat:"passiva" });
+    blockItems.push({ file: ordCaus[b],   cat:"causale" });
+    blockItems.push({ file: ordPass[b],   cat:"passiva" });
     blockItems.push({ file: nextFin(),    cat:"finale" });
-    blockItems.push({ file: nextIntN(),   cat:"interrogativa_negativa" });
-    blockItems.push({ file: nextCausat(), cat:"causativa" });
+    blockItems.push({ file: ordIntN[b],   cat:"interrogativa_negativa" });
+    blockItems.push({ file: ordCausat[b], cat:"causativa" });
 
     const clean = blockItems.filter(x => x.file);
-    const arranged = arrangeWithConstraints(clean, lastCatGlobal);
+    const arranged = arrangeWithConstraints(clean, lastCatGlobal, lastImgGlobal);
 
     for(const it of arranged) seq.push(it.file);
     lastCatGlobal = arranged[arranged.length-1]?.cat ?? lastCatGlobal;
+    lastImgGlobal = chiaveImmagine(arranged[arranged.length-1]?.file);
   }
 
   return seq;
@@ -448,6 +620,14 @@ function buildSequenceByBlocks(blockCount){
 /* =========================
    STORAGE KEYS
 ========================= */
+const LK = {
+  numPartecipante:"partecipante_numero",
+  gruppo:"partecipante_gruppo",
+  sesso:"partecipante_sesso",
+  eta:"partecipante_eta",
+  scolarita:"partecipante_scolarita"
+};
+
 const K = {
   fase:"fase",
   pre_i:"pre_i",
@@ -462,8 +642,16 @@ const K = {
    UI
 ========================= */
 const titleEl = document.getElementById("title");
+const setupBoxEl = document.getElementById("setupBox");
+const setupErrorEl = document.getElementById("setupError");
+const numPartecipanteEl = document.getElementById("numPartecipante");
+const etaEl = document.getElementById("eta");
+const scolaritaEl = document.getElementById("scolarita");
 const boxEl = document.getElementById("box");
+const boxTextEl = document.getElementById("boxText");
 const progressEl = document.getElementById("progress");
+const playAudioBtn = document.getElementById("playAudioBtn");
+const audioEl = document.getElementById("audioIstruzioni");
 const btn = document.getElementById("mainBtn");
 
 let timer = null;
@@ -475,8 +663,11 @@ function resetUI(){
   if(timer){ clearInterval(timer); timer=null; }
   if(timeoutFinePre){ clearTimeout(timeoutFinePre); timeoutFinePre=null; }
 
+  setupBoxEl.style.display="none";
+  setupErrorEl.style.display="none";
   boxEl.style.display="none";
   progressEl.style.display="none";
+  audioEl.pause();
   btn.style.display="inline-block";
   btn.disabled=false;
   btn.onclick=null;
@@ -497,9 +688,74 @@ function resetSession(){
 }
 
 /* =========================
+   SETUP PARTECIPANTE
+========================= */
+function renderSetup(){
+  resetUI();
+  sessionStorage.setItem(K.fase,"setup");
+  setTitle("Dati partecipante");
+
+  setupBoxEl.style.display="block";
+
+  btn.textContent="Continua";
+  btn.onclick=()=>{
+    const numero = numPartecipanteEl.value.trim();
+    const gruppoEl = document.querySelector('input[name="gruppo"]:checked');
+    const gruppo = gruppoEl ? gruppoEl.value : null;
+    const sessoEl = document.querySelector('input[name="sesso"]:checked');
+    const sesso = sessoEl ? sessoEl.value : null;
+    const eta = etaEl.value.trim();
+    const scolarita = scolaritaEl.value.trim();
+
+    if(!numero || !gruppo || !sesso || !eta || !scolarita){
+      setupErrorEl.textContent = "Compila tutti i campi prima di continuare.";
+      setupErrorEl.style.display="block";
+      return;
+    }
+
+    localStorage.setItem(LK.numPartecipante, numero);
+    localStorage.setItem(LK.gruppo, gruppo);
+    localStorage.setItem(LK.sesso, sesso);
+    localStorage.setItem(LK.eta, eta);
+    localStorage.setItem(LK.scolarita, scolarita);
+
+    resetSession();
+    renderPreStart();
+  };
+}
+
+/* =========================
    PRE START
 ========================= */
 function renderPreStart(){
+  resetUI();
+  setTitle("Types of Token");
+
+  boxEl.style.display="flex";
+  boxTextEl.textContent =
+    "In questo test vedrai degli oggetti di forme e colore diversi. " +
+    "In alcune prove vedrai anche un breve video.\n\n" +
+    "Per ogni prova ascolterai una frase. Ascolta attentamente la frase " +
+    "ed esegui l'azione richiesta utilizzando gli oggetti.\n\n" +
+    "In alcune prove non dovrai eseguire alcuna azione.\n\n" +
+    "Premi \"Inizia\" per accedere alla prova preliminare.";
+
+  playAudioBtn.onclick = ()=>{
+    audioEl.currentTime = 0;
+    audioEl.play().catch(()=>{});
+  };
+
+  btn.textContent="Inizia";
+  btn.onclick=()=>{
+    sessionStorage.setItem(K.fase,"pre_ready");
+    renderPreReady();
+  };
+}
+
+/* =========================
+   PRE READY (schermata intermedia)
+========================= */
+function renderPreReady(){
   resetUI();
   setTitle("Prova preliminare");
   btn.textContent="Inizia";
@@ -509,7 +765,6 @@ function renderPreStart(){
     runPre();
   };
 }
-
 /* =========================
    PRE RUN
 ========================= */
@@ -569,8 +824,11 @@ function renderPausa(){
   progressEl.style.display="block";
   btn.style.display="none";
 
-  const fine = Date.now() + DURATA_PAUSA_SEC*1000;
+  // ✅ se la pagina viene ricaricata durante la pausa, il conto alla rovescia continua
+  const fineSalvata = parseInt(sessionStorage.getItem(K.fine) || "0", 10);
+  const fine = fineSalvata > 0 ? fineSalvata : Date.now() + DURATA_PAUSA_SEC*1000;
   sessionStorage.setItem(K.fine, String(fine));
+  progressEl.textContent = `${Math.max(0, Math.ceil((fine - Date.now())/1000))} s`;
 
   timer = setInterval(()=>{
     const rest = Math.max(0, Math.ceil((fine - Date.now())/1000));
@@ -635,12 +893,18 @@ function renderTestEnd(){
   const fase = sessionStorage.getItem(K.fase);
 
   if(!fase){
-    resetSession();
-    renderPreStart();
+    localStorage.removeItem(LK.numPartecipante);
+    localStorage.removeItem(LK.gruppo);
+    localStorage.removeItem(LK.sesso);
+    localStorage.removeItem(LK.eta);
+    localStorage.removeItem(LK.scolarita);
+    renderSetup();
     return;
   }
 
-  if(fase==="pre_start") renderPreStart();
+  if(fase==="setup") renderSetup();
+  else if(fase==="pre_start") renderPreStart();
+  else if(fase==="pre_ready") renderPreReady();
   else if(fase==="pre_run") runPre();
   else if(fase==="pre_end") renderPreEnd();
   else if(fase==="test_intro") renderTestIntro();
@@ -656,4 +920,3 @@ function renderTestEnd(){
 
 </body>
 </html>
-
