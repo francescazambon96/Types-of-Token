@@ -150,6 +150,18 @@
       display:none;
     }
 
+    /* ✅ le frasi vengono mostrate qui dentro: così l'audio parte da solo anche su iPad */
+    #frameFrase{
+      position:fixed;
+      inset:0;
+      width:100%;
+      height:100%;
+      border:0;
+      background:#fff;
+      z-index:10;
+      display:none;
+    }
+
     #playAudioBtn{
       display:flex;
       align-items:center;
@@ -222,6 +234,8 @@
 
   <div id="progress"></div>
 </div>
+
+<iframe id="frameFrase" title="Frase"></iframe>
 
 <script>
 /* =========================
@@ -657,6 +671,73 @@ const btn = document.getElementById("mainBtn");
 let timer = null;
 let timeoutFinePre = null;
 
+/* =========================
+   ✅ CONTENITORE + AUDIO (iPad)
+   Safari su iPad fa partire l'audio da solo solo se la pagina ha ricevuto un tocco.
+   Per questo l'index resta sempre aperto: le frasi si aprono dentro frameFrase
+   e l'audio viene suonato dall'index, "sbloccato" dal primo tocco su un pulsante.
+========================= */
+const frameEl = document.getElementById("frameFrase");
+let ctxAudio = null;
+const bufferAudio = {};
+let sorgenteCorrente = null;
+
+function sbloccaAudio(){
+  try{
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC) return;
+    if(!ctxAudio) ctxAudio = new AC();
+    if(ctxAudio.state !== "running") ctxAudio.resume();
+    // suono muto: su iPad serve per sbloccare l'audio
+    const b = ctxAudio.createBuffer(1, 1, 22050);
+    const s = ctxAudio.createBufferSource();
+    s.buffer = b; s.connect(ctxAudio.destination); s.start(0);
+  }catch(e){}
+}
+
+function decodifica(arrayBuffer){
+  return new Promise((ok, ko) => ctxAudio.decodeAudioData(arrayBuffer, ok, ko));
+}
+
+// chiamata dalle pagine delle frasi: suona la frase e avvisa quando parte davvero
+window.suonaFrase = async function(url, cb){
+  if(!ctxAudio || ctxAudio.state !== "running") throw new Error("audio non sbloccato");
+  let buf = bufferAudio[url];
+  if(!buf){
+    const resp = await fetch(url);
+    if(!resp.ok) throw new Error("audio non trovato: " + url);
+    buf = await decodifica(await resp.arrayBuffer());
+    bufferAudio[url] = buf;
+  }
+  if(ctxAudio.state !== "running") throw new Error("audio sospeso");
+  const src = ctxAudio.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctxAudio.destination);
+  src.onended = () => { if(sorgenteCorrente === src) sorgenteCorrente = null; if(cb && cb.onEnd) cb.onEnd(); };
+  if(sorgenteCorrente){ try{ sorgenteCorrente.stop(); }catch(e){} }
+  sorgenteCorrente = src;
+  src.start(0);
+  if(cb && cb.onStart) cb.onStart(buf.duration);
+};
+
+function apriFrase(file){
+  frameEl.src = file;
+  frameEl.style.display = "block";
+}
+
+function chiudiFrase(){
+  // se si passa alla frase successiva mentre l'audio suona, lo ferma
+  if(sorgenteCorrente){ try{ sorgenteCorrente.stop(); }catch(e){} sorgenteCorrente = null; }
+  frameEl.style.display = "none";
+  frameEl.src = "about:blank";
+}
+
+// chiamata dalle pagine delle frasi quando si preme "Prossima frase"
+window.prossimaFrase = function(){
+  chiudiFrase();
+  continua();
+};
+
 function setTitle(t){ titleEl.textContent = t; }
 
 function resetUI(){
@@ -699,6 +780,7 @@ function renderSetup(){
 
   btn.textContent="Continua";
   btn.onclick=()=>{
+    sbloccaAudio();
     const numero = numPartecipanteEl.value.trim();
     const gruppoEl = document.querySelector('input[name="gruppo"]:checked');
     const gruppo = gruppoEl ? gruppoEl.value : null;
@@ -747,6 +829,7 @@ function renderPreStart(){
 
   btn.textContent="Inizia";
   btn.onclick=()=>{
+    sbloccaAudio();
     sessionStorage.setItem(K.fase,"pre_ready");
     renderPreReady();
   };
@@ -760,6 +843,7 @@ function renderPreReady(){
   setTitle("Prova preliminare");
   btn.textContent="Inizia";
   btn.onclick=()=>{
+    sbloccaAudio();
     sessionStorage.setItem(K.pre_i,"0");
     sessionStorage.setItem(K.fase,"pre_run");
     runPre();
@@ -779,7 +863,7 @@ function runPre(){
   }
 
   sessionStorage.setItem(K.pre_i,String(i+1));
-  location.href = seq[i];
+  apriFrase(seq[i]);
 }
 
 /* =========================
@@ -809,6 +893,7 @@ function renderTestIntro(){
   setTitle("Types of Token");
   btn.textContent="Inizia";
   btn.onclick=()=>{
+    sbloccaAudio();
     sessionStorage.setItem(K.fase,"test");
     runTest();
   };
@@ -844,6 +929,7 @@ function renderPausa(){
       btn.style.display="inline-block";
       btn.textContent = "Riprendi prova";
       btn.onclick = ()=>{
+        sbloccaAudio();
         sessionStorage.setItem(K.pausa, "true");
         sessionStorage.setItem(K.fase, "test");
         runTest();
@@ -873,7 +959,7 @@ function runTest(){
   }
 
   sessionStorage.setItem(K.idx,String(idx+1));
-  location.href = seq[idx];
+  apriFrase(seq[idx]);
 }
 
 /* =========================
@@ -887,9 +973,23 @@ function renderTestEnd(){
 }
 
 /* =========================
+   RIPRESA DOPO RICARICAMENTO
+   (serve un tocco per sbloccare di nuovo l'audio)
+========================= */
+function renderRiprendi(){
+  resetUI();
+  setTitle("Types of Token");
+  btn.textContent="Riprendi";
+  btn.onclick=()=>{
+    sbloccaAudio();
+    continua();
+  };
+}
+
+/* =========================
    START
 ========================= */
-(function(){
+function continua(){
   const fase = sessionStorage.getItem(K.fase);
 
   if(!fase){
@@ -915,6 +1015,13 @@ function renderTestEnd(){
     resetSession();
     renderPreStart();
   }
+}
+
+(function(){
+  const fase = sessionStorage.getItem(K.fase);
+  // se la pagina viene ricaricata durante la prova, un tocco su "Riprendi" riattiva l'audio
+  if(fase === "pre_run" || fase === "test") renderRiprendi();
+  else continua();
 })();
 </script>
 
