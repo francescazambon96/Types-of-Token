@@ -119,6 +119,8 @@
   </div>
 
   <script>
+/* RT_ONSET_PATCH */
+/* RT_PATCH_APPLIED */
     /* =========================================================
        🔧 PARAMETRI DA CAMBIARE
        - FASE: "prova preliminare" oppure "prova"
@@ -127,7 +129,7 @@
     ========================================================= */
     const ESERCIZIO = "Frase attiva 5";
     const CATEGORIA = "Frasi attive";
-    const STIMOLO   = "Tocca il quadrato bianco";
+    const STIMOLO   = "Tocca il quadrato giallo";
 
     const FASE = "prova preliminare";      // "prova preliminare" | "prova"
     const INCLUDE_IN_PUNTEGGIO = false;    // false preliminare | true prova
@@ -137,13 +139,13 @@
     const AUDIO_SRC = "../audio/Frase attiva 5.m4a";
 
     const nomiGettoni = {
-      alto_sx:  "quadrato bianco",
-      alto_dx:  "triangolo bianco",
-      basso_sx: "quadrato rosso",
-      basso_dx: "cerchio nero"
+      alto_sx:  "triangolo giallo",
+      alto_dx:  "cerchio nero",
+      basso_sx: "quadrato giallo",
+      basso_dx: "quadrato verde"
     };
 
-    const GETTONE_CORRETTO = "quadrato bianco";
+    const GETTONE_CORRETTO = "quadrato giallo";
     /* ========================================================= */
 
     // ✅ Salvataggio separato per non confondere terapista
@@ -160,10 +162,19 @@
     let haToccato = false;
     let haRisposto = false;
     let gettoneScelto = null;
+    let tStimoloInizio = null;   // istante in cui finisce l'audio
+    let tempoReazioneMs = null;  // tempo di reazione calcolato
 
     img.src = IMG_SRC;
     audioSrc.src = AUDIO_SRC;
     audio.load();
+
+    // ✅ RT: il cronometro parte quando l'audio inizia davvero
+    let tAudioInizio = null;
+    let tempoDaInizioAudioMs = null;
+    audio.addEventListener("playing", () => {
+      if (tAudioInizio === null) tAudioInizio = performance.now();
+    });
 
     window.addEventListener("load", () => {
       audio.play().catch(() => {});
@@ -188,8 +199,17 @@
       fadeSpot.style.top    = cy + "px";
     }
 
-    img.addEventListener("click", (e) => {
+    img.addEventListener("pointerdown", (e) => {
       if (haToccato) return;
+
+      // ✅ calcola il tempo di reazione PRIMA di qualunque altra cosa
+      if (tAudioInizio != null) {
+        tempoDaInizioAudioMs = Math.round(performance.now() - tAudioInizio);
+        // dalla FINE della frase (negativo = ha risposto prima che finisse)
+        tempoReazioneMs = isFinite(audio.duration)
+          ? Math.round(tempoDaInizioAudioMs - audio.duration * 1000)
+          : null;
+      }
 
       const q = calcolaQuadranteClick(e);
       fissaSpot(q);
@@ -222,6 +242,11 @@
           ? ("Ha toccato il " + rispostaTxt)
           : "Non ha toccato alcun gettone",
 
+        tempo_reazione_ms: tempoReazioneMs,   // dalla fine audio (negativo = anticipato)
+        tempo_da_inizio_audio_ms: tempoDaInizioAudioMs,
+        durata_audio_ms: isFinite(audio.duration) ? Math.round(audio.duration * 1000) : null,
+        audio_partito: tAudioInizio !== null,
+
         timestamp: new Date().toISOString()
       };
 
@@ -240,6 +265,8 @@
     }
 
     nextBtn.addEventListener("click", () => {
+      if (nextBtn.disabled) return;
+      nextBtn.disabled = true;   // evita doppi salvataggi
       valutaESalva();
       location.href = "index.html";
     });

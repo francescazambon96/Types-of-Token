@@ -7,63 +7,13 @@
 
   <style>
     * { box-sizing: border-box; }
-
-    body{
-      margin:0;
-      background:white;
-      font-family:sans-serif;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      min-height:100vh;
-    }
-
-    .wrapper{
-      width:100%;
-      max-width:900px;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      padding:10px 0;
-    }
-
-    .screen{
-      width:100%;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      gap:15px;
-    }
-
-    canvas{
-      border:none !important;
-      touch-action:none;
-      max-width:80vw;
-      max-height:80vh;
-      width:auto;
-      height:auto;
-      display:block;
-    }
-
-    /* ✅ BOTTONE (via di mezzo, stile unico) */
-    .buttons-row{
-      display:flex;
-      justify-content:center;
-      width:100%;
-      max-width:380px; /* ✅ lasciamo 380 */
-      margin-top:14px;
-    }
-
-    button{
-      width:100%;
-      padding:11px 22px;
-      font-size:17.5px;
-      border-radius:9px;
-      border:2px solid #333;
-      background:#f2f2f2;
-      cursor:pointer;
-    }
+    body { margin:0; background:white; font-family:sans-serif; display:flex; justify-content:center; align-items:center; min-height:100vh; }
+    .wrapper { width:100%; max-width:900px; display:flex; justify-content:center; align-items:center; }
+    .screen { width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:15px; padding:10px 0; }
+    .media-slot { width:100%; display:flex; justify-content:center; align-items:center; }
+    canvas { border:none !important; touch-action:none; max-width:80vw; max-height:80vh; width:auto; height:auto; display:block; }
+    .buttons-row{ display:flex; justify-content:center; width:100%; max-width:380px; margin-top:14px; }
+    button{ width:100%; padding:11px 22px; font-size:17.5px; border-radius:9px; border:2px solid #333; background:#f2f2f2; cursor:pointer; }
   </style>
 </head>
 
@@ -75,9 +25,10 @@
 
   <div class="wrapper">
     <div class="screen">
-      <canvas id="scene"></canvas>
+      <div class="media-slot">
+        <canvas id="scene"></canvas>
+      </div>
 
-      <!-- ✅ WRAP CORRETTO -->
       <div class="buttons-row">
         <button id="nextBtn">Prossima frase</button>
       </div>
@@ -85,6 +36,8 @@
   </div>
 
 <script>
+/* RT_ONSET_PATCH */
+/* RT_PATCH_APPLIED */
   const canvas     = document.getElementById("scene");
   const ctx        = canvas.getContext("2d");
   const nextBtn    = document.getElementById("nextBtn");
@@ -98,200 +51,284 @@
   canvas.height = HEIGHT * ratio;
   ctx.scale(ratio, ratio);
 
-  // DIAGONALE (come richiesto):
-  // ROSSO: alto a destra
-  // BIANCO: basso a sinistra
-  // Frase: "Usa il cerchio rosso per spostare il cerchio bianco"
-  const startRed   = { x: 560, y: 160, radius: 45 }; // alto-destra
-  const startWhite = { x: 240, y: 340, radius: 45 }; // basso-sinistra
+  /* =======================
+     ✅ CONFIG (solo testo umano)
+  ======================= */
+  const ESERCIZIO  = "Frase finale 4";
+  const CATEGORIA  = "Frasi finali";
+  const FASE = "prova";
+  const INCLUDE_IN_PUNTEGGIO = true;
 
-  const redToken   = { x: startRed.x,   y: startRed.y,   radius: startRed.radius };
-  const whiteToken = { x: startWhite.x, y: startWhite.y, radius: startWhite.radius };
+  const MOVER_NAME  = "quadrato verde";
+  const TARGET_NAME = "cerchio nero";
+  const STIMOLO = `Usa il ${MOVER_NAME} per spostare il ${TARGET_NAME}`;
 
-  let dragging = null;
+  const NEXT_HREF = "index.html";
 
-  let collisionByRed = false;
+  /* =======================
+     MAPPA nomi -> ID
+  ======================= */
+  const NAME_TO_ID = {
+    "quadrato giallo":  "sqYellow",
+    "cerchio rosso": "cirRed",
+    "cerchio nero": "cirBlack",
+    "quadrato verde": "sqGreen"
+  };
+
+  const CORRETTO_MOVER  = NAME_TO_ID[MOVER_NAME];
+  const CORRETTO_TARGET = NAME_TO_ID[TARGET_NAME];
+
+  /* =======================
+     TOKEN: 2x2
+  ======================= */
+  const SQ_SIZE = 90;
+  const CIRC_R  = 45;
+
+  // Layout richiesto:
+  // Riga alta:   Quadrato verde (sx)  Cerchio rosso (dx)
+  // Riga bassa:  Cerchio nero (sx)    Quadrato giallo (dx)
+  const start = {
+    sqGreen:   { x:290, y:150 },
+    cirRed: { x:510, y:150 },
+    cirBlack:   { x:290, y:350 },
+    sqYellow:  { x:510, y:350 }
+  };
+
+  const tokens = [
+    { id:"sqGreen",   type:"square", color:"green",   x:start.sqGreen.x,   y:start.sqGreen.y,   size:SQ_SIZE },
+    { id:"cirRed", type:"circle", color:"red", x:start.cirRed.x, y:start.cirRed.y, r:CIRC_R },
+    { id:"sqYellow",   type:"square", color:"#FFF000",   x:start.sqYellow.x,   y:start.sqYellow.y,   size:SQ_SIZE, outline:true },
+    { id:"cirBlack",  type:"circle", color:"black",   x:start.cirBlack.x,  y:start.cirBlack.y,  r:CIRC_R }
+  ];
+
+  let draggingId = null;
+
+  /* =======================
+     ✅ REGISTRAZIONE RISPOSTA
+  ======================= */
+  let collisionByMover = false;
+  let moverWho = null;
+  let targetWho = null;
+
   let anyDrag = false;
-  let draggedRed = false;
-  let draggedWhite = false;
+  const dragged = { sqGreen:false, cirRed:false, sqYellow:false, cirBlack:false };
 
-  /* ---------------- UTILI ---------------- */
-  function distance(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); }
+  let tStimoloInizio = null;   // istante in cui finisce l'audio
+  let tempoReazioneMs = null;  // tempo di reazione: dal fine audio al primo trascinamento
 
-  function getCirclePolygon(c) {
-    const sides = 18;
-    const poly = [];
-    for (let i = 0; i < sides; i++) {
-      const angle = (2 * Math.PI * i) / sides;
-      poly.push({ x: c.x + c.radius * Math.cos(angle), y: c.y + c.radius * Math.sin(angle) });
+  const ID_TO_NAME = {
+    sqGreen:   "quadrato verde",
+    cirRed: "cerchio rosso",
+    sqYellow:   "quadrato giallo",
+    cirBlack:  "cerchio nero"
+  };
+  function nomeToken(id){ return ID_TO_NAME[id] || id; }
+
+  /* ---------------- GEOMETRIA (SAT) ---------------- */
+  function circPoly(c, n=18){
+    const pts=[];
+    for(let i=0;i<n;i++){
+      const ang=i/n*Math.PI*2;
+      pts.push({x:c.x+Math.cos(ang)*c.r, y:c.y+Math.sin(ang)*c.r});
     }
-    return poly;
+    return pts;
   }
-
-  function getAxes(poly) {
-    const axes = [];
-    for (let i = 0; i < poly.length; i++) {
-      const p1 = poly[i];
-      const p2 = poly[(i + 1) % poly.length];
-      const edge = { x: p2.x - p1.x, y: p2.y - p1.y };
-      let normal = { x: -edge.y, y: edge.x };
-      const len = Math.hypot(normal.x, normal.y);
-      if (len !== 0) {
-        normal.x /= len; normal.y /= len;
-        axes.push(normal);
-      }
-    }
-    return axes;
+  function squarePoly(s){
+    const h = s.size/2;
+    return [
+      {x:s.x-h, y:s.y-h},
+      {x:s.x+h, y:s.y-h},
+      {x:s.x+h, y:s.y+h},
+      {x:s.x-h, y:s.y+h}
+    ];
   }
-
-  function projectPolygon(poly, axis) {
-    let min = poly[0].x * axis.x + poly[0].y * axis.y;
-    let max = min;
-    for (let i = 1; i < poly.length; i++) {
-      const p = poly[i];
-      const proj = p.x * axis.x + p.y * axis.y;
-      if (proj < min) min = proj;
-      if (proj > max) max = proj;
-    }
-    return { min, max };
+  function poly(t){
+    if(t.type==="circle") return circPoly(t);
+    if(t.type==="square") return squarePoly(t);
+    return [];
   }
-
-  function getMTV(polyA, polyB, centerA, centerB) {
-    const axes = [...getAxes(polyA), ...getAxes(polyB)];
-    let smallestOverlap = Infinity;
-    let smallestAxis = null;
-
-    for (const axis of axes) {
-      const projA = projectPolygon(polyA, axis);
-      const projB = projectPolygon(polyB, axis);
-      const overlap = Math.min(projA.max, projB.max) - Math.max(projA.min, projB.min);
-      if (overlap <= 0) return null;
-      if (overlap < smallestOverlap) {
-        smallestOverlap = overlap;
-        smallestAxis = axis;
-      }
+  function center(t){ return {x:t.x, y:t.y}; }
+  function axes(p){
+    const a=[];
+    for(let i=0;i<p.length;i++){
+      const p1=p[i], p2=p[(i+1)%p.length];
+      const e={x:p2.x-p1.x, y:p2.y-p1.y};
+      let n={x:-e.y, y:e.x};
+      const l=Math.hypot(n.x,n.y);
+      if(l===0) continue;
+      n.x/=l; n.y/=l;
+      a.push(n);
     }
-
-    const dir = (centerB.x - centerA.x) * smallestAxis.x + (centerB.y - centerA.y) * smallestAxis.y;
-    let axis = smallestAxis;
-    if (dir < 0) axis = { x: -smallestAxis.x, y: -smallestAxis.y };
-
-    return { x: axis.x * smallestOverlap, y: axis.y * smallestOverlap };
+    return a;
+  }
+  function proj(p,a){
+    let mn=p[0].x*a.x+p[0].y*a.y, mx=mn;
+    for(let i=1;i<p.length;i++){
+      const v=p[i].x*a.x+p[i].y*a.y;
+      if(v<mn) mn=v;
+      if(v>mx) mx=v;
+    }
+    return {mn,mx};
+  }
+  function getMTV(polyA, polyB, cA, cB){
+    const ax = [...axes(polyA), ...axes(polyB)];
+    let smallest = Infinity;
+    let best = null;
+    for(const n of ax){
+      const a = proj(polyA,n);
+      const b = proj(polyB,n);
+      const overlap = Math.min(a.mx,b.mx) - Math.max(a.mn,b.mn);
+      if(overlap<=0) return null;
+      if(overlap<smallest){ smallest=overlap; best=n; }
+    }
+    const dir = (cB.x-cA.x)*best.x + (cB.y-cA.y)*best.y;
+    const axis = (dir<0) ? {x:-best.x,y:-best.y} : best;
+    return {x:axis.x*smallest, y:axis.y*smallest};
   }
 
   /* ---------------- DISEGNO ---------------- */
-  function drawCircle(t, fill) {
+  function drawCircle(c){
     ctx.beginPath();
-    ctx.arc(t.x, t.y, t.radius, 0, Math.PI * 2);
-    ctx.fillStyle = fill;
+    ctx.arc(c.x,c.y,c.r,0,Math.PI*2);
+    ctx.closePath();
+    ctx.fillStyle = c.color;
     ctx.fill();
-    ctx.strokeStyle = "black";
-    ctx.lineWidth = 1.5 / ratio;
+    ctx.strokeStyle="black";
+    ctx.lineWidth=1/ratio;
     ctx.stroke();
   }
-
-  function drawScene() {
-    ctx.clearRect(0, 0, WIDTH, HEIGHT);
-    drawCircle(whiteToken, "white");
-    drawCircle(redToken,   "red");
+  function drawSquare(s){
+    const h=s.size/2;
+    ctx.beginPath();
+    ctx.rect(s.x-h, s.y-h, s.size, s.size);
+    ctx.closePath();
+    ctx.fillStyle = s.outline ? "#FFF000" : s.color;
+    ctx.fill();
+    ctx.strokeStyle="black";
+    ctx.lineWidth=1/ratio;
+    ctx.stroke();
   }
-
-  /* ----------- COLLISIONI ---------------- */
-  function handleCollisionRedPushWhite() {
-    const redPoly   = getCirclePolygon(redToken);
-    const whitePoly = getCirclePolygon(whiteToken);
-
-    const mtv = getMTV(
-      redPoly,
-      whitePoly,
-      { x: redToken.x,   y: redToken.y },
-      { x: whiteToken.x, y: whiteToken.y }
-    );
-
-    if (mtv) {
-      whiteToken.x += mtv.x;
-      whiteToken.y += mtv.y;
-      collisionByRed = true;
-    }
-  }
-
-  function handleCollisionWhitePushRed() {
-    const redPoly   = getCirclePolygon(redToken);
-    const whitePoly = getCirclePolygon(whiteToken);
-
-    const mtv = getMTV(
-      whitePoly,
-      redPoly,
-      { x: whiteToken.x, y: whiteToken.y },
-      { x: redToken.x,   y: redToken.y }
-    );
-
-    if (mtv) {
-      redToken.x += mtv.x;
-      redToken.y += mtv.y;
-    }
+  function drawScene(){
+    ctx.clearRect(0,0,WIDTH,HEIGHT);
+    // prima cerchi poi quadrati (come negli altri file)
+    tokens.filter(t=>t.type==="circle").forEach(drawCircle);
+    tokens.filter(t=>t.type==="square").forEach(drawSquare);
   }
 
   /* ---------------- HIT TEST ---------------- */
-  function insideCircle(x, y, c) { return distance(x, y, c.x, c.y) <= c.radius; }
-
-  function getPos(evt) {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = WIDTH / rect.width;
-    const scaleY = HEIGHT / rect.height;
-
+  function insideCircle(x,y,c){
+    const dx=x-c.x, dy=y-c.y;
+    return dx*dx+dy*dy <= c.r*c.r;
+  }
+  function insideSquare(x,y,s){
+    const h=s.size/2;
+    return (x>=s.x-h && x<=s.x+h && y>=s.y-h && y<=s.y+h);
+  }
+  function hit(x,y,t){
+    if(t.type==="circle") return insideCircle(x,y,t);
+    if(t.type==="square") return insideSquare(x,y,t);
+    return false;
+  }
+  function getPos(evt){
+    const rect=canvas.getBoundingClientRect();
+    const sx=WIDTH/rect.width;
+    const sy=HEIGHT/rect.height;
     let clientX, clientY;
-    if (evt.touches && evt.touches[0]) {
-      clientX = evt.touches[0].clientX;
-      clientY = evt.touches[0].clientY;
-    } else {
-      clientX = evt.clientX;
-      clientY = evt.clientY;
-    }
+    if(evt.touches && evt.touches[0]){ clientX=evt.touches[0].clientX; clientY=evt.touches[0].clientY; }
+    else { clientX=evt.clientX; clientY=evt.clientY; }
+    return { x:(clientX-rect.left)*sx, y:(clientY-rect.top)*sy };
+  }
 
-    return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY
-    };
+  /* ---------------- SPINTA QUANDO TOCCA ---------------- */
+  function pushOthersFrom(dragId){
+    const MAX_PASSES = 12;
+
+    for(let pass=0; pass<MAX_PASSES; pass++){
+      let moved=false;
+      const A = tokens.find(t=>t.id===dragId);
+      if(!A) break;
+
+      for(const B of tokens){
+        if(B.id===A.id) continue;
+        const mtv = getMTV(poly(A), poly(B), center(A), center(B));
+        if(mtv){
+          B.x += mtv.x;
+          B.y += mtv.y;
+          moved = true;
+
+          if(!collisionByMover){
+            collisionByMover = true;
+            moverWho = A.id;
+            targetWho = B.id;
+          }
+        }
+      }
+
+      // propagazione
+      for(let i=0;i<tokens.length;i++){
+        for(let j=0;j<tokens.length;j++){
+          if(i===j) continue;
+          const X=tokens[i], Y=tokens[j];
+          const mtv2 = getMTV(poly(X), poly(Y), center(X), center(Y));
+          if(mtv2){
+            Y.x += mtv2.x;
+            Y.y += mtv2.y;
+            moved = true;
+          }
+        }
+      }
+
+      if(!moved) break;
+    }
   }
 
   /* ---------------- DRAG ---------------- */
-  function startDrag(evt) {
-    const pos = getPos(evt);
+  function startDrag(evt){
+    evt.preventDefault();
+    const p=getPos(evt);
 
-    if (insideCircle(pos.x, pos.y, redToken)) {
-      dragging = "red";
-      anyDrag = true;
-      draggedRed = true;
+    const order = [
+      ...tokens.filter(t=>t.type==="square"),
+      ...tokens.filter(t=>t.type==="circle")
+    ];
+
+    draggingId = null;
+    for(let i=order.length-1;i>=0;i--){
+      const t=order[i];
+      if(hit(p.x,p.y,t)){
+        // ✅ calcola il tempo di reazione solo al PRIMO trascinamento
+        if(!anyDrag){
+          if (tAudioInizio != null) {
+            tempoDaInizioAudioMs = Math.round(performance.now() - tAudioInizio);
+            // dalla FINE della frase (negativo = ha risposto prima che finisse)
+            tempoReazioneMs = isFinite(audioFrase.duration)
+              ? Math.round(tempoDaInizioAudioMs - audioFrase.duration * 1000)
+              : null;
+          }
+        }
+
+        draggingId = t.id;
+        anyDrag = true;
+        dragged[t.id] = true;
+        break;
+      }
     }
-    else if (insideCircle(pos.x, pos.y, whiteToken)) {
-      dragging = "white";
-      anyDrag = true;
-      draggedWhite = true;
-    }
-    else dragging = null;
   }
 
-  function drag(evt) {
-    if (!dragging) return;
+  function drag(evt){
+    if(!draggingId) return;
     evt.preventDefault();
 
-    const pos = getPos(evt);
+    const p=getPos(evt);
+    const t=tokens.find(x=>x.id===draggingId);
+    if(!t) return;
 
-    if (dragging === "red") {
-      redToken.x = pos.x;
-      redToken.y = pos.y;
-      handleCollisionRedPushWhite();
-    } else if (dragging === "white") {
-      whiteToken.x = pos.x;
-      whiteToken.y = pos.y;
-      handleCollisionWhitePushRed();
-    }
-
+    t.x=p.x; t.y=p.y;
+    pushOthersFrom(draggingId);
     drawScene();
   }
 
-  function stopDrag() { dragging = null; }
+  function stopDrag(){ draggingId=null; }
 
   /* ---------------- AUDIO ---------------- */
   function playFrase() {
@@ -304,24 +341,38 @@
     playFrase();
   };
 
+  // ✅ RT: il cronometro parte quando l'audio inizia davvero
+  let tAudioInizio = null;
+  let tempoDaInizioAudioMs = null;
+  audioFrase.addEventListener("playing", () => {
+    if (tAudioInizio === null) tAudioInizio = performance.now();
+  });
+
   /* ---------------- SALVATAGGIO ---------------- */
   function salvaRispostaTerapeuta(dati) {
     const key = "risposte_sessione";
     const esistenti = JSON.parse(localStorage.getItem(key) || "[]");
 
-    esistenti.push({
-      esercizio: "Frase finale 4",
-      categoria: "Frasi finali",
-      stimolo: "Usa il cerchio rosso per spostare il cerchio bianco",
+    const risposta = {
+      esercizio: dati.esercizio || ESERCIZIO,
+      categoria: dati.categoria || CATEGORIA,
+      stimolo:   dati.stimolo   || STIMOLO,
+      fase: FASE,
+      include_in_punteggio: INCLUDE_IN_PUNTEGGIO,
       ha_risposto: dati.ha_risposto,
       risposta_grezza: dati.risposta_grezza,
       descrizione_risposta: dati.descrizione_risposta,
       corretta: dati.corretta,
       punteggio: dati.punteggio,
       ripetizioni_audio: 0,
+      tempo_reazione_ms: dati.tempo_reazione_ms,   // dalla fine audio (negativo = anticipato)
+      tempo_da_inizio_audio_ms: tempoDaInizioAudioMs,
+      durata_audio_ms: isFinite(audioFrase.duration) ? Math.round(audioFrase.duration * 1000) : null,
+      audio_partito: tAudioInizio !== null,
       timestamp: new Date().toISOString()
-    });
+    };
 
+    esistenti.push(risposta);
     localStorage.setItem(key, JSON.stringify(esistenti));
   }
 
@@ -332,58 +383,50 @@
     let descrizioneResp = "";
     let haRispostoFlag  = anyDrag;
 
-    const rossoSiEMosso =
-      redToken.x !== startRed.x || redToken.y !== startRed.y;
-
-    const biancoSiEMosso =
-      whiteToken.x !== startWhite.x || whiteToken.y !== startWhite.y;
-
     if (!anyDrag) {
       corretta        = null;
       punteggio       = 0;
       rispostaGrezza  = "nessun movimento";
       descrizioneResp = "Non ha mosso nessun gettone";
     }
-    else if (collisionByRed) {
-      corretta        = true;
-      punteggio       = 1;
-      rispostaGrezza  = "rosso sposta bianco";
-      descrizioneResp = "Ha usato il cerchio rosso per spostare il cerchio bianco";
-    }
-    else if (draggedWhite && rossoSiEMosso) {
-      corretta        = false;
-      punteggio       = 0;
-      rispostaGrezza  = "bianco sposta rosso";
-      descrizioneResp = "Ha usato il cerchio bianco per spostare il cerchio rosso";
-    }
-    else if (
-      (draggedRed && !biancoSiEMosso) ||
-      (draggedWhite && !rossoSiEMosso)
-    ) {
-      corretta        = false;
-      punteggio       = 0;
-      rispostaGrezza  = "un gettone senza spostare l'altro";
-      descrizioneResp = "Ha spostato un gettone senza far spostare l’altro";
+    else if (collisionByMover) {
+      rispostaGrezza  = `${nomeToken(moverWho)} sposta ${nomeToken(targetWho)}`;
+      descrizioneResp = `Ha usato il ${nomeToken(moverWho)} per spostare il ${nomeToken(targetWho)}`;
+
+      if (moverWho === CORRETTO_MOVER && targetWho === CORRETTO_TARGET) {
+        corretta  = true;
+        punteggio = 1;
+      } else {
+        corretta  = false;
+        punteggio = 0;
+      }
     }
     else {
       corretta        = false;
       punteggio       = 0;
-      rispostaGrezza  = "movimento non corretto";
-      descrizioneResp = "Ha mosso i gettoni senza rispettare la consegna";
+      rispostaGrezza  = "movimento senza spinta";
+      descrizioneResp = "Ha spostato un gettone senza far spostare gli altri";
     }
 
     salvaRispostaTerapeuta({
+      esercizio: ESERCIZIO,
+      categoria: CATEGORIA,
+      stimolo: STIMOLO,
       ha_risposto: haRispostoFlag,
       risposta_grezza: rispostaGrezza,
       descrizione_risposta: descrizioneResp,
       corretta: corretta,
-      punteggio: punteggio
+      punteggio: punteggio,
+      ripetizioni_audio: 0,
+      tempo_reazione_ms: tempoReazioneMs
     });
   }
 
   nextBtn.onclick = () => {
+    if (nextBtn.disabled) return;
+    nextBtn.disabled = true;   // evita doppi salvataggi
     valutaESalva();
-    location.href = "index.html";
+    location.href = NEXT_HREF;
   };
 
   /* ---------------- EVENTI ---------------- */
@@ -391,8 +434,8 @@
   canvas.addEventListener("mousemove", drag);
   window.addEventListener("mouseup", stopDrag);
 
-  canvas.addEventListener("touchstart", startDrag, { passive: false });
-  canvas.addEventListener("touchmove",  drag,      { passive: false });
+  canvas.addEventListener("touchstart", startDrag, { passive:false });
+  canvas.addEventListener("touchmove",  drag,      { passive:false });
   canvas.addEventListener("touchend",   stopDrag);
   canvas.addEventListener("touchcancel",stopDrag);
 
@@ -401,5 +444,3 @@
 
 </body>
 </html>
-
-
