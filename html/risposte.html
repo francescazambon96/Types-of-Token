@@ -91,7 +91,7 @@
         <th>Stimolo</th>
         <th>Risposta</th>
         <th>Esito</th>
-        <th>Tempo reazione</th>
+        <th>RT (ms)</th>
         <th>Punti</th>
         <th>Ora</th>
       </tr>
@@ -215,7 +215,7 @@ function popolaTabella() {
           : (r.ha_risposto ? (r.descrizione_risposta || "") : "")
       }</td>
       <td></td>
-      <td>${r.tempo_reazione_ms != null ? r.tempo_reazione_ms + " ms" : "-"}</td>
+      <td>${rtPrincipale(r).ms != null ? rtPrincipale(r).ms + " ms" : "-"}</td>
       <td>${punti}</td>
       <td>${r.timestamp ? new Date(r.timestamp).toLocaleTimeString() : ""}</td>
     `;
@@ -238,7 +238,7 @@ function popolaTabella() {
    CONTROLLI
 ========================= */
 function tornaIndex() {
-  if (!confirm("Hai controllato che il file dei risultati sia nella cartella \"risultati\" dell'app File? Tornando all'index le risposte verranno cancellate.")) return;
+  if (!confirm("Hai salvato il file dei risultati? Tornando all'index le risposte verranno cancellate.")) return;
   localStorage.removeItem(STORAGE_KEY);
   sessionStorage.clear();
   location.href = "index.html";
@@ -255,6 +255,20 @@ function cancella() {
    RISULTATI: CSV (prova preliminare + prova) + copia JSON
 ========================= */
 
+/* =========================
+   ✅ RT UNICO
+   - frasi con audio: dall'inizio della frase
+   - frasi con video: dalla comparsa dell'immagine dopo il video
+========================= */
+const RE_FRASI_VIDEO = /^Frase (causale|causativa|passiva|interrogativa negativa)\b/i;
+
+function rtPrincipale(r) {
+  if (r.tempo_da_inizio_audio_ms != null) return { ms: r.tempo_da_inizio_audio_ms, da: "inizio frase" };
+  if (RE_FRASI_VIDEO.test(r.esercizio || "") && r.tempo_reazione_ms != null)
+    return { ms: r.tempo_reazione_ms, da: "comparsa immagine" };
+  return { ms: null, da: "" };
+}
+
 function costruisciRisultati() {
   const preliminari = JSON.parse(localStorage.getItem(STORAGE_KEY_PRE) || "[]");
   const tutte = [
@@ -266,7 +280,7 @@ function costruisciRisultati() {
   const info = getPartecipanteInfo();
   const { numero, gruppo, sesso, eta, scolarita } = info;
 
-  const rows = [["Fase","N","Esercizio","Categoria","Stimolo","Ha_risposto","Risposta","Corretta","Punteggio","Tempo_reazione_ms","Tipo_RT","Tempo_da_inizio_audio_ms","Durata_audio_ms","Audio_partito","Timestamp","Partecipante","Gruppo","Sesso","Eta","Scolarita"]];
+  const rows = [["Fase","N","Esercizio","Categoria","Stimolo","Ha_risposto","Risposta","Corretta","Punteggio","RT_ms","RT_misurato_da","Tipo_RT","Durata_audio_ms","Audio_partito","Timestamp","Partecipante","Gruppo","Sesso","Eta","Scolarita"]];
   const contatori = {};
   tutte.forEach(r => {
     contatori[r._fase] = (contatori[r._fase] || 0) + 1;
@@ -280,9 +294,9 @@ function costruisciRisultati() {
       (r.descrizione_risposta || r.risposta_grezza || ""),
       r.corretta === true ? "corretto" : (r.corretta === false ? "errato" : ""),
       r.punteggio != null ? r.punteggio : "",
-      r.tempo_reazione_ms != null ? r.tempo_reazione_ms : "",
-      r.tipo_rt || (r.tempo_reazione_ms != null ? "risposta" : ""),
-      r.tempo_da_inizio_audio_ms != null ? r.tempo_da_inizio_audio_ms : "",
+      rtPrincipale(r).ms != null ? rtPrincipale(r).ms : "",
+      rtPrincipale(r).da,
+      rtPrincipale(r).ms != null ? (r.tipo_rt || "risposta") : "",
       r.durata_audio_ms != null ? r.durata_audio_ms : "",
       r.audio_partito === true ? "sì" : (r.audio_partito === false ? "no" : ""),
       r.timestamp || "",
@@ -326,7 +340,6 @@ function scaricaCSV() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
-  mostraStato(`File scaricato: ${a.download} — controlla che sia nella cartella "risultati" dell'app File.`, true);
 }
 
 mostraPartecipanteInfo();
