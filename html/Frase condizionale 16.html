@@ -125,7 +125,19 @@
   </div>
 
 <script>
+/* CONTENITORE_PATCH */
+// ✅ se la frase e' aperta dentro l'index (contenitore), torna all'index senza ricaricarlo
+function vaiAllaProssima() {
+  try {
+    if (window.parent !== window && typeof window.parent.prossimaFrase === "function") {
+      window.parent.prossimaFrase();
+      return;
+    }
+  } catch (e) {}
+  location.href = "index.html";
+}
 /* RT_ONSET_PATCH */
+/* ASCOLTA_PATCH */
 /* RT_PATCH_APPLIED */
 /* =========================================================
    PARAMETRI
@@ -166,7 +178,7 @@ audio.load();
 
 // autoplay (può fallire su mobile)
 window.addEventListener("load", () => {
-  audio.play().catch(() => {});
+  avviaFrase();
 });
 
 // ✅ RT: il cronometro parte quando l'audio inizia davvero
@@ -175,6 +187,52 @@ let tempoDaInizioAudioMs = null;
 audio.addEventListener("playing", () => {
   if (tAudioInizio === null) tAudioInizio = performance.now();
 });
+// ✅ iPad: se il browser blocca l'avvio automatico, compare "Ascolta la frase"
+function mostraPulsanteAscolta() {
+  if (tAudioInizio !== null || document.getElementById("rigaAscolta")) return;
+  const riga = document.createElement("div");
+  riga.id = "rigaAscolta";
+  riga.className = "buttons-row";
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = "▶ Ascolta la frase";
+  b.addEventListener("click", () => {
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  });
+  riga.appendChild(b);
+  const rigaNext = nextBtn.closest(".buttons-row") || nextBtn.parentElement;
+  rigaNext.parentElement.insertBefore(riga, rigaNext);
+}
+audio.addEventListener("playing", () => {
+  const r = document.getElementById("rigaAscolta");
+  if (r) r.remove();
+});
+// se dopo 2 secondi l'audio non e' ancora partito, mostra comunque il pulsante
+// ✅ iPad: la frase viene suonata dall'index (audio automatico)
+let durataContenitoreSec = null;
+let avvioContenitore = false;
+function durataFraseSec() {
+  return durataContenitoreSec != null ? durataContenitoreSec : audio.duration;
+}
+function avviaFrase() {
+  let P = null;
+  try { if (window.parent !== window && typeof window.parent.suonaFrase === "function") P = window.parent; } catch (e) {}
+  if (!P) { audio.play().catch(() => mostraPulsanteAscolta()); return; }
+  avvioContenitore = true;
+  const sorgente = audio.querySelector("source");
+  const url = (sorgente && sorgente.src) || audio.src;
+  P.suonaFrase(url, {
+    onStart: (durata) => {
+      durataContenitoreSec = durata;
+      if (tAudioInizio === null) tAudioInizio = performance.now();
+      const r = document.getElementById("rigaAscolta");
+      if (r) r.remove();
+    }
+  }).catch(() => { avvioContenitore = false; mostraPulsanteAscolta(); });
+}
+// se dopo 2 secondi l'audio non e' partito (e non sta caricando dall'index), mostra il pulsante
+window.addEventListener("load", () => setTimeout(() => { if (!avvioContenitore) mostraPulsanteAscolta(); }, 2000));
 
 /* =========================
    STATO
@@ -217,8 +275,8 @@ img.addEventListener("pointerdown", (e) => {
   if (tAudioInizio != null) {
     tempoDaInizioAudioMs = Math.round(performance.now() - tAudioInizio);
     // dalla FINE della frase (negativo = ha risposto prima che finisse)
-    tempoReazioneMs = isFinite(audio.duration)
-      ? Math.round(tempoDaInizioAudioMs - audio.duration * 1000)
+    tempoReazioneMs = isFinite(durataFraseSec())
+      ? Math.round(tempoDaInizioAudioMs - durataFraseSec() * 1000)
       : null;
   }
 
@@ -259,7 +317,7 @@ function valutaESalva() {
 
     tempo_reazione_ms: tempoReazioneMs,   // dalla fine audio (negativo = anticipato)
     tempo_da_inizio_audio_ms: tempoDaInizioAudioMs,
-    durata_audio_ms: isFinite(audio.duration) ? Math.round(audio.duration * 1000) : null,
+    durata_audio_ms: isFinite(durataFraseSec()) ? Math.round(durataFraseSec() * 1000) : null,
     audio_partito: tAudioInizio !== null,
     timestamp: new Date().toISOString()
   };
@@ -276,7 +334,7 @@ nextBtn.addEventListener("click", () => {
   nextBtn.disabled = true;   // evita doppi salvataggi
   valutaESalva();
   sessionStorage.setItem("fase", "test");
-  location.href = "index.html";
+  vaiAllaProssima();
 });
 </script>
 </body>

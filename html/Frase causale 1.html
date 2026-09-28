@@ -147,6 +147,17 @@
   </div>
 
   <script>
+/* CONTENITORE_PATCH */
+// ✅ se la frase e' aperta dentro l'index (contenitore), torna all'index senza ricaricarlo
+function vaiAllaProssima() {
+  try {
+    if (window.parent !== window && typeof window.parent.prossimaFrase === "function") {
+      window.parent.prossimaFrase();
+      return;
+    }
+  } catch (e) {}
+  location.href = "index.html";
+}
 /* RT_PATCH_APPLIED */
     /* =========================================================
        🔧 PARAMETRI DA CAMBIARE (come Frase attiva)
@@ -311,7 +322,7 @@
       if (nextBtn.disabled) return;
       nextBtn.disabled = true;   // evita doppi salvataggi
       valutaESalva();
-      location.href = "index.html";
+      vaiAllaProssima();
     });
   </script>
 </body>
