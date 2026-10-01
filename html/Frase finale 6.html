@@ -71,7 +71,7 @@ function vaiAllaProssima() {
   const nextBtn    = document.getElementById("nextBtn");
   const audioFrase = document.getElementById("audioFrase");
 
-  const WIDTH  = 800;
+  const WIDTH  = 500;
   const HEIGHT = 500;
   const ratio  = window.devicePixelRatio || 1;
 
@@ -111,17 +111,17 @@ function vaiAllaProssima() {
   /* =======================
      TOKEN: 2x2
   ======================= */
-  const TRI_SIZE = 90;
-  const CIRC_R   = 45;
+  const TRI_SIZE = 93;
+  const CIRC_R   = 48;
 
   // Layout richiesto:
   // Riga alta:  Triangolo verde (sx)  Triangolo rosso (dx)
   // Riga bassa: Cerchio nero (sx) Cerchio giallo (dx)
   const start = {
-    triGreen:    { x:290, y:150 },
-    triRed:  { x:510, y:150 },
-    cirBlack:  { x:290, y:350 },
-    cirYellow: { x:510, y:350 }
+    triGreen:    { x:154, y:154 },
+    triRed:  { x:346, y:154 },
+    cirBlack:  { x:154, y:346 },
+    cirYellow: { x:346, y:346 }
   };
 
   const tokens = [
@@ -157,7 +157,7 @@ function vaiAllaProssima() {
   /* ---------------- GEOMETRIA (SAT) ---------------- */
   function triPoly(t){
     const h = t.size / 2;
-    const b = t.size * 0.55;
+    const b = t.size*0.577;
     return [{x:t.x,y:t.y-h},{x:t.x-b,y:t.y+h},{x:t.x+b,y:t.y+h}];
   }
   function circPoly(c, n=18){
@@ -210,7 +210,7 @@ function vaiAllaProssima() {
 
   /* ---------------- DISEGNO ---------------- */
   function drawTriangle(t){
-    const h=t.size/2, b=t.size*0.55;
+    const h=t.size/2, b=t.size*0.577;
     ctx.beginPath();
     ctx.moveTo(t.x, t.y-h);
     ctx.lineTo(t.x-b, t.y+h);
@@ -244,7 +244,7 @@ function vaiAllaProssima() {
 
   /* ---------------- HIT TEST ---------------- */
   function insideTriangle(x,y,t){
-    const h=t.size/2, b=t.size*0.55;
+    const h=t.size/2, b=t.size*0.577;
     const ax=t.x,   ay=t.y-h;
     const bx=t.x-b, by=t.y+h;
     const cx=t.x+b, cy=t.y+h;

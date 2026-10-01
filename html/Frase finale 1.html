@@ -71,7 +71,7 @@ function vaiAllaProssima() {
   const nextBtn    = document.getElementById("nextBtn");
   const audioFrase = document.getElementById("audioFrase");
 
-  const WIDTH  = 800;
+  const WIDTH  = 500;
   const HEIGHT = 500;
   const ratio  = window.devicePixelRatio || 1;
 
@@ -109,17 +109,17 @@ function vaiAllaProssima() {
   /* =======================
      TOKEN: 2x2
   ======================= */
-  const CIRC_R   = 45;
-  const SQ_SIZE  = 90;
+  const CIRC_R   = 48;
+  const SQ_SIZE  = 94;
 
   // Layout richiesto:
   // Riga alta:  Cerchio bianco (sx)  Quadrato rosso (dx)
   // Riga bassa:  Quadrato nero (sx)    Cerchio verde (dx)  
   const start = {
-    cirWhite:  { x:290, y:150 },
-    sqRed:  { x:510, y:150 },
-    sqBlack:  { x:290, y:350 },
-    cirGreen:     { x:510, y:350 }
+    cirWhite:  { x:154, y:154 },
+    sqRed:  { x:346, y:154 },
+    sqBlack:  { x:154, y:346 },
+    cirGreen:     { x:346, y:346 }
   };
 
   const tokens = [

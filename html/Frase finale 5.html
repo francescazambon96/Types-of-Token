@@ -71,7 +71,7 @@ function vaiAllaProssima() {
   const nextBtn    = document.getElementById("nextBtn");
   const audioFrase = document.getElementById("audioFrase");
 
-  const WIDTH  = 800;
+  const WIDTH  = 500;
   const HEIGHT = 500;
   const ratio  = window.devicePixelRatio || 1;
 
@@ -109,17 +109,17 @@ function vaiAllaProssima() {
   /* =======================
      TOKEN: 2x2
   ======================= */
-  const SQ_SIZE  = 90;
-  const TRI_SIZE = 90;
+  const SQ_SIZE  = 94;
+  const TRI_SIZE = 93;
 
   // Layout richiesto:
   // Riga alta:  Quadrato bianco (sx)  Triangolo nero (dx)
   // Riga bassa: Quadrato rosso  (sx)  Triangolo giallo (dx)
   const start = {
-    sqWhite: { x:290, y:150 },
-    triBlack:  { x:510, y:150 },
-    sqRed:   { x:290, y:350 },
-    triYellow: { x:510, y:350 }
+    sqWhite: { x:154, y:154 },
+    triBlack:  { x:346, y:154 },
+    sqRed:   { x:154, y:346 },
+    triYellow: { x:346, y:346 }
   };
 
   const tokens = [
@@ -155,7 +155,7 @@ function vaiAllaProssima() {
   /* ---------------- GEOMETRIA (SAT) ---------------- */
   function triPoly(t){
     const h = t.size / 2;
-    const b = t.size * 0.55;
+    const b = t.size*0.577;
     return [{x:t.x,y:t.y-h},{x:t.x-b,y:t.y+h},{x:t.x+b,y:t.y+h}];
   }
   function squarePoly(s){
@@ -213,7 +213,7 @@ function vaiAllaProssima() {
 
   /* ---------------- DISEGNO ---------------- */
   function drawTriangle(t){
-    const h=t.size/2, b=t.size*0.55;
+    const h=t.size/2, b=t.size*0.577;
     ctx.beginPath();
     ctx.moveTo(t.x, t.y-h);
     ctx.lineTo(t.x-b, t.y+h);
@@ -248,7 +248,7 @@ function vaiAllaProssima() {
 
   /* ---------------- HIT TEST ---------------- */
   function insideTriangle(x,y,t){
-    const h=t.size/2, b=t.size*0.55;
+    const h=t.size/2, b=t.size*0.577;
     const ax=t.x,   ay=t.y-h;
     const bx=t.x-b, by=t.y+h;
     const cx=t.x+b, cy=t.y+h;
