@@ -88,6 +88,7 @@
 <div class="note">Questi punteggi sono della <strong>prova preliminare</strong> e non influenzano la prova.</div>
 
 <div class="partecipante-info" id="partecipanteInfo"></div>
+<div class="summary" id="statoSalvataggio" style="font-weight:600"></div>
 <div class="summary" id="totale"></div>
 <div class="category-summary" id="perCategoria"></div>
 
@@ -258,7 +259,13 @@
     }
   }
 
-  function scaricaCSV() {
+  // true se la pagina è aperta come app dalla schermata Home
+  const IN_APP = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+  const statoDiv = document.getElementById("statoSalvataggio");
+  function mostraStato(testo) { statoDiv.textContent = testo; statoDiv.style.color = "#1b5e20"; }
+
+  // app dalla Home: menu di condivisione (Salva su File, Drive, AirDrop...); browser: download diretto
+  async function scaricaCSV(auto) {
     if (!risposte.length) {
       alert("Nessuna risposta da esportare.");
       return;
@@ -299,12 +306,26 @@
       .map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(";"))
       .join("\n");
 
+    const nomeFile = `risposte_prova_preliminare${numero ? "_p" + numero : ""}${gruppo ? "_" + gruppo : ""}.csv`;
+
+    if (!auto && IN_APP && navigator.canShare) {
+      try {
+        const file = new File(["\uFEFF" + csv], nomeFile, { type: "text/csv" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: nomeFile });
+          mostraStato("✅ Menu di salvataggio aperto: controlla di aver salvato il file.");
+          return;
+        }
+      } catch (e) {
+        if (e && e.name === "AbortError") return;
+      }
+    }
+
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
     a.href = url;
-    const nomeFile = `risposte_prova_preliminare${numero ? "_p" + numero : ""}${gruppo ? "_" + gruppo : ""}.csv`;
     a.download = nomeFile;
     document.body.appendChild(a);
     a.click();
@@ -315,7 +336,11 @@
 
   mostraPartecipanteInfo();
   popolaTabella();
-  if (risposte.length) scaricaCSV(); // scarica subito il CSV, se ci sono dati
+  // browser: scarica subito il CSV; app dalla Home: si salva col pulsante (il download automatico coprirebbe la tabella)
+  if (risposte.length) {
+    if (IN_APP) mostraStato("Per salvare il file tocca «Scarica tabella» e scegli dove salvarlo (File o Drive).");
+    else scaricaCSV(true);
+  }
 </script>
 
 </body>

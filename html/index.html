@@ -825,8 +825,6 @@ function resetUI(){
    SALVATAGGIO DATI
    - archivio di sicurezza: ogni partecipante viene copiato in "archivio_sessioni"
      prima che i dati vengano azzerati per il partecipante successivo
-   - "Salva dati" a fine prova: crea un file e apre il menu di condivisione dell'iPad
-     (Salva su File, AirDrop, Mail...)
 ========================= */
 function leggiSessioneCorrente(){
   const grezzo = k => {
@@ -857,38 +855,13 @@ function archiviaSessione(){
     const s = leggiSessioneCorrente();
     if(!s.risposte && !s.risposte_preliminare) return;
     const arch = JSON.parse(localStorage.getItem("archivio_sessioni") || "[]");
-    if(arch.length && firmaSessione(arch[arch.length-1]) === firmaSessione(s)) return; // già archiviata
+    const ultima = arch.length ? arch[arch.length-1] : null;
+    if(ultima && firmaSessione(ultima) === firmaSessione(s)) return; // già archiviata
+    // dopo "Torna all'Index" le risposte principali vengono cancellate: non duplicare lo stesso partecipante
+    if(ultima && ultima.risposte && !s.risposte && ultima.partecipante.numero === s.partecipante.numero) return;
     arch.push(s);
     localStorage.setItem("archivio_sessioni", JSON.stringify(arch));
   }catch(e){}
-}
-
-async function salvaDati(){
-  archiviaSessione();
-  const dati = {
-    corrente: leggiSessioneCorrente(),
-    archivio: JSON.parse(localStorage.getItem("archivio_sessioni") || "[]")
-  };
-  const num = String(dati.corrente.partecipante.numero || "senza_numero").replace(/[^\w-]/g, "_");
-  const nome = "types_of_token_partecipante_" + num + ".txt";
-  const testo = JSON.stringify(dati, null, 2);
-
-  try{
-    const file = new File([testo], nome, { type:"text/plain" });
-    if(navigator.canShare && navigator.canShare({ files:[file] })){
-      await navigator.share({ files:[file], title:nome });
-      return;
-    }
-  }catch(e){
-    if(e && e.name === "AbortError") return;   // l'utente ha chiuso il menu
-  }
-
-  // alternativa: download diretto
-  const url = URL.createObjectURL(new Blob([testo], { type:"text/plain" }));
-  const a = document.createElement("a");
-  a.href = url; a.download = nome;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url), 5000);
 }
 
 /* =========================
@@ -1106,13 +1079,9 @@ function runTest(){
 function renderTestEnd(){
   resetUI();
   setTitle("Fine prova");
-  archiviaSessione();
-  btn.textContent="Salva dati";
-  btn.onclick=async ()=>{
-    await salvaDati();
-    btn.textContent="Vedi risposte";
-    btn.onclick=()=>location.href="risposte.html";
-  };
+  archiviaSessione();   // copia di sicurezza interna
+  btn.textContent="Vedi risposte";
+  btn.onclick=()=>location.href="risposte.html";
 }
 
 /* =========================

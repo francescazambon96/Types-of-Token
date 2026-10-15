@@ -102,7 +102,7 @@
   <div class="controls">
     <button onclick="tornaIndex()">Torna all'Index</button>
     <button onclick="cancella()">Cancella risposte</button>
-    <button onclick="scaricaCSV()">Scarica di nuovo i risultati</button>
+    <button onclick="scaricaCSV()">Scarica i risultati</button>
   </div>
 
 <script>
@@ -327,15 +327,36 @@ function mostraStato(testo, ok) {
   statoDiv.style.color = ok ? "#1b5e20" : "#b71c1c";
 }
 
-// ✅ download sull'iPad (cartella di download di Safari, es. File > risultati)
-function scaricaCSV() {
+// true se la pagina è aperta come app dalla schermata Home
+const IN_APP = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+
+// ✅ salvataggio file
+// - app dalla Home: menu di condivisione dell'iPad (Salva su File, Drive, AirDrop...)
+// - browser: download diretto come prima
+async function scaricaCSV(auto) {
   const r = costruisciRisultati();
   if (!r) return;
-  const blob = new Blob(["\uFEFF" + r.csv], {type:"text/csv;charset=utf-8;"});
+  const contenuto = "\uFEFF" + r.csv;
+  const nomeFile = r.nomeBase + ".csv";
+
+  if (!auto && IN_APP && navigator.canShare) {
+    try {
+      const file = new File([contenuto], nomeFile, { type: "text/csv" });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: nomeFile });
+        mostraStato("✅ Menu di salvataggio aperto: controlla di aver salvato il file.", true);
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === "AbortError") return;   // menu chiuso senza salvare
+    }
+  }
+
+  const blob = new Blob([contenuto], {type:"text/csv;charset=utf-8;"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = r.nomeBase + ".csv";
+  a.download = nomeFile;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -344,8 +365,13 @@ function scaricaCSV() {
 
 mostraPartecipanteInfo();
 popolaTabella();
-// ✅ appena si apre la pagina scarica il file (se Safari chiede conferma, tocca "Scarica")
-scaricaCSV();
+// browser: scarica subito il file (se chiede conferma, tocca "Scarica")
+// app dalla Home: NON scarica da sola (coprirebbe la tabella), si salva col pulsante in basso
+if (IN_APP) {
+  if (costruisciRisultati()) mostraStato("Per salvare il file tocca «Scarica i risultati» e scegli dove salvarlo (File o Drive).", true);
+} else {
+  scaricaCSV(true);
+}
 </script>
 
 </body>
