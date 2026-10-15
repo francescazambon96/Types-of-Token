@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <!-- ✅ aperto dalla schermata Home dell'iPad: a schermo intero, senza barre di Safari -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -184,7 +184,8 @@
   
     /* ✅ iPad: niente zoom con doppio tocco, niente menu del tocco lungo, niente selezione */
     html, body{
-      touch-action:manipulation;
+      touch-action:none;
+      overscroll-behavior:none;
       -webkit-user-select:none;
       user-select:none;
       -webkit-tap-highlight-color:transparent;
@@ -254,6 +255,13 @@
 <iframe id="frameFrase" title="Frase"></iframe>
 
 <script>
+// ✅ iPad: blocca pizzico, zoom e trascinamento nella pagina index
+["gesturestart","gesturechange","gestureend"].forEach(ev =>
+  document.addEventListener(ev, e => e.preventDefault())
+);
+document.addEventListener("touchmove", e => e.preventDefault(), { passive:false });
+document.addEventListener("contextmenu", e => e.preventDefault());
+
 /* =========================
    CONFIG
 ========================= */
@@ -694,6 +702,29 @@ let timeoutFinePre = null;
    e l'audio viene suonato dall'index, "sbloccato" dal primo tocco su un pulsante.
 ========================= */
 const frameEl = document.getElementById("frameFrase");
+
+// ✅ applica gli stessi blocchi dentro ogni frase, senza modificare i file delle frasi
+frameEl.addEventListener("load", () => {
+  try {
+    const doc = frameEl.contentDocument;
+    if (!doc || doc.location.href === "about:blank") return;
+
+    const st = doc.createElement("style");
+    st.textContent = "html,body{touch-action:none;overscroll-behavior:none;overflow:hidden;} body{position:fixed;inset:0;width:100%;height:100dvh;}";
+    doc.head.appendChild(st);
+
+    ["gesturestart","gesturechange","gestureend"].forEach(ev =>
+      doc.addEventListener(ev, e => e.preventDefault())
+    );
+    doc.addEventListener("touchmove", e => e.preventDefault(), { passive:false });
+    doc.addEventListener("contextmenu", e => e.preventDefault());
+
+    // conta solo il primo dito: gli altri tocchi non arrivano al gestore della frase
+    doc.addEventListener("pointerdown", e => {
+      if (!e.isPrimary) e.stopImmediatePropagation();
+    }, true);
+  } catch (e) {}
+});
 let ctxAudio = null;
 const bufferAudio = {};
 let sorgenteCorrente = null;
