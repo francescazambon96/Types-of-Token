@@ -753,7 +753,10 @@ function sbloccaAudio(){
   try{
     const AC = window.AudioContext || window.webkitAudioContext;
     if(!AC) return;
-    if(!ctxAudio) ctxAudio = new AC();
+    if(!ctxAudio){
+      ctxAudio = new AC();
+      ctxAudio.onstatechange = () => setTimeout(controllaAudio, 200);
+    }
     if(ctxAudio.state !== "running") ctxAudio.resume();
     // suono muto: su iPad serve per sbloccare l'audio
     const b = ctxAudio.createBuffer(1, 1, 22050);
@@ -762,13 +765,32 @@ function sbloccaAudio(){
   }catch(e){}
 }
 
+// ✅ dopo il blocco schermo iOS riattiva l'audio con un po' di ritardo: aspetto che sia davvero pronto
+async function attendiAudioPronto(){
+  const aspetta = async ms => {
+    for(let t = 0; t < ms && ctxAudio && ctxAudio.state !== "running"; t += 100){
+      await new Promise(r => setTimeout(r, 100));
+    }
+  };
+  await aspetta(1500);
+  if(ctxAudio && ctxAudio.state !== "running"){
+    // contesto rimasto bloccato: ne creo uno nuovo
+    try{ ctxAudio.close(); }catch(e){}
+    ctxAudio = null;
+    sbloccaAudio();
+    await aspetta(1500);
+  }
+  return !!ctxAudio && ctxAudio.state === "running";
+}
+
 function decodifica(arrayBuffer){
   return new Promise((ok, ko) => ctxAudio.decodeAudioData(arrayBuffer, ok, ko));
 }
 
 // chiamata dalle pagine delle frasi: suona la frase e avvisa quando parte davvero
 window.suonaFrase = async function(url, cb){
-  if(!ctxAudio || ctxAudio.state !== "running") throw new Error("audio non sbloccato");
+  if(!ctxAudio) throw new Error("audio non sbloccato");
+  if(ctxAudio.state !== "running" && !(await attendiAudioPronto())) throw new Error("audio non sbloccato");
   let buf = bufferAudio[url];
   if(!buf){
     const resp = await fetch(url);
@@ -1039,8 +1061,10 @@ function renderPausa(){
 
       btn.style.display="inline-block";
       btn.textContent = "Riprendi prova";
-      btn.onclick = ()=>{
+      btn.onclick = async ()=>{
+        btn.disabled = true;
         sbloccaAudio();
+        await attendiAudioPronto();   // dopo un blocco schermo l'audio ci mette un attimo a ripartire
         sessionStorage.setItem(K.pausa, "true");
         sessionStorage.setItem(K.fase, "test");
         runTest();
@@ -1097,6 +1121,51 @@ function renderRiprendi(){
     continua();
   };
 }
+
+/* =========================
+   ✅ AUDIO BLOCCATO DOPO IL BLOCCO DELLO SCHERMO
+   Se il tablet si blocca durante una frase, iOS ferma l'audio e per riattivarlo serve un tocco.
+   Appare una schermata "Riprendi": al tocco l'audio riparte e la frase interrotta ricomincia.
+========================= */
+const ovRiprendi = document.createElement("div");
+ovRiprendi.style.cssText = "display:none;position:fixed;inset:0;z-index:99999;background:#fff;flex-direction:column;align-items:center;justify-content:center;gap:24px;text-align:center;font-family:sans-serif;";
+ovRiprendi.innerHTML = '<div style="font-size:28px;font-weight:600;">Pausa</div>' +
+  '<button type="button" id="ovRiprendiBtn" style="padding:16px 44px;font-size:24px;border-radius:12px;border:2px solid #333;background:#f2f2f2;">Riprendi</button>';
+document.body.appendChild(ovRiprendi);
+
+function faseConFrase(){
+  const f = sessionStorage.getItem(K.fase);
+  return f === "pre_run" || f === "test";
+}
+
+function controllaAudio(){
+  if(ctxAudio && faseConFrase() && ctxAudio.state !== "running"){
+    ovRiprendi.style.display = "flex";
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if(!document.hidden) setTimeout(controllaAudio, 300);
+});
+window.addEventListener("pageshow", () => setTimeout(controllaAudio, 300));
+
+document.getElementById("ovRiprendiBtn").onclick = async () => {
+  sbloccaAudio();
+  if(!(await attendiAudioPronto())) return;   // resta la schermata: basta riprovare
+  ovRiprendi.style.display = "none";
+
+  // la frase interrotta riparte da capo
+  const fase = sessionStorage.getItem(K.fase);
+  if(fase === "pre_run"){
+    const i = parseInt(sessionStorage.getItem(K.pre_i) || "0", 10);
+    sessionStorage.setItem(K.pre_i, String(Math.max(0, i - 1)));
+    runPre();
+  } else if(fase === "test"){
+    const i = parseInt(sessionStorage.getItem(K.idx) || "0", 10);
+    sessionStorage.setItem(K.idx, String(Math.max(0, i - 1)));
+    runTest();
+  }
+};
 
 /* =========================
    START
