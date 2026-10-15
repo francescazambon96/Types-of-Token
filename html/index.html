@@ -186,10 +186,20 @@
     html, body{
       touch-action:none;
       overscroll-behavior:none;
+      overflow:hidden;
       -webkit-user-select:none;
       user-select:none;
       -webkit-tap-highlight-color:transparent;
       -webkit-text-size-adjust:100%;
+    }
+    /* ✅ pagina fissa: non può essere trascinata su/giù (la schermata dei dati sta nello schermo) */
+    body{
+      position:fixed;
+      inset:0;
+      width:100%;
+      height:100dvh;
+      min-height:0;
+      overflow:hidden;
     }
     input{ -webkit-user-select:text; user-select:text; }   /* i campi dei dati restano scrivibili */
     img, video{ -webkit-touch-callout:none; }
