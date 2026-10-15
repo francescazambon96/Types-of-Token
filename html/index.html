@@ -272,7 +272,7 @@
 document.addEventListener("touchmove", e => e.preventDefault(), { passive:false });
 document.addEventListener("contextmenu", e => e.preventDefault());
 
-// ✅ schermo intero al tocco (nasconde barra del browser e indirizzo, dove il browser lo permette)
+// ✅ schermo intero (si attiva DOPO l'inserimento dei dati, perché a schermo intero la tastiera non funziona)
 function entraSchermoIntero(){
   const el = document.documentElement;
   const req = el.requestFullscreen || el.webkitRequestFullscreen;
@@ -280,8 +280,6 @@ function entraSchermoIntero(){
     try{ const p = req.call(el); if(p && p.catch) p.catch(()=>{}); }catch(e){}
   }
 }
-document.addEventListener("click", entraSchermoIntero);
-document.addEventListener("touchend", entraSchermoIntero);
 
 /* =========================
    CONFIG
@@ -869,6 +867,7 @@ function renderSetup(){
     localStorage.setItem(LK.eta, eta);
     localStorage.setItem(LK.scolarita, scolarita);
 
+    entraSchermoIntero();
     resetSession();
     renderPreStart();
   };
