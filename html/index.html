@@ -272,6 +272,17 @@
 document.addEventListener("touchmove", e => e.preventDefault(), { passive:false });
 document.addEventListener("contextmenu", e => e.preventDefault());
 
+// ✅ schermo intero al tocco (nasconde barra del browser e indirizzo, dove il browser lo permette)
+function entraSchermoIntero(){
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if(req && !document.fullscreenElement && !document.webkitFullscreenElement){
+    try{ const p = req.call(el); if(p && p.catch) p.catch(()=>{}); }catch(e){}
+  }
+}
+document.addEventListener("click", entraSchermoIntero);
+document.addEventListener("touchend", entraSchermoIntero);
+
 /* =========================
    CONFIG
 ========================= */
