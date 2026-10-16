@@ -765,6 +765,14 @@ function sbloccaAudio(){
   }catch(e){}
 }
 
+// ✅ ricrea l'audio da zero (da usare dopo che la pagina è stata nascosta/bloccata: iOS a volte
+// dice "running" ma poi non esce più suono)
+function rinnovaAudio(){
+  try{ if(ctxAudio) ctxAudio.close(); }catch(e){}
+  ctxAudio = null;
+  sbloccaAudio();
+}
+
 // ✅ dopo il blocco schermo iOS riattiva l'audio con un po' di ritardo: aspetto che sia davvero pronto
 async function attendiAudioPronto(){
   const aspetta = async ms => {
@@ -1063,7 +1071,7 @@ function renderPausa(){
       btn.textContent = "Riprendi prova";
       btn.onclick = async ()=>{
         btn.disabled = true;
-        sbloccaAudio();
+        if(paginaNascosta){ rinnovaAudio(); paginaNascosta = false; } else sbloccaAudio();
         await attendiAudioPronto();   // dopo un blocco schermo l'audio ci mette un attimo a ripartire
         sessionStorage.setItem(K.pausa, "true");
         sessionStorage.setItem(K.fase, "test");
@@ -1138,20 +1146,24 @@ function faseConFrase(){
   return f === "pre_run" || f === "test";
 }
 
+let paginaNascosta = false;   // true se la pagina è stata nascosta/bloccata dopo aver acceso l'audio
+
 function controllaAudio(){
-  if(ctxAudio && faseConFrase() && ctxAudio.state !== "running"){
+  if(ctxAudio && faseConFrase() && (paginaNascosta || ctxAudio.state !== "running")){
     ovRiprendi.style.display = "flex";
   }
 }
 
 document.addEventListener("visibilitychange", () => {
-  if(!document.hidden) setTimeout(controllaAudio, 300);
+  if(document.hidden){ if(ctxAudio) paginaNascosta = true; }
+  else setTimeout(controllaAudio, 300);
 });
 window.addEventListener("pageshow", () => setTimeout(controllaAudio, 300));
 
 document.getElementById("ovRiprendiBtn").onclick = async () => {
-  sbloccaAudio();
+  if(paginaNascosta) rinnovaAudio(); else sbloccaAudio();
   if(!(await attendiAudioPronto())) return;   // resta la schermata: basta riprovare
+  paginaNascosta = false;
   ovRiprendi.style.display = "none";
 
   // la frase interrotta riparte da capo
