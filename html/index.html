@@ -209,6 +209,7 @@
 <body>
 <div id="container">
   <h1 id="title">Types of Token</h1>
+  <div style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:#c8c8c8;pointer-events:none;z-index:1">v17ott-b</div>
 
   <div id="setupBox">
     <div id="setupError"></div>
@@ -269,7 +270,7 @@
 ["gesturestart","gesturechange","gestureend"].forEach(ev =>
   document.addEventListener(ev, e => e.preventDefault())
 );
-document.addEventListener("touchmove", e => e.preventDefault(), { passive:false });
+document.addEventListener("touchmove", e => { if(e.target.closest && e.target.closest("[data-scroll]")) return; e.preventDefault(); }, { passive:false });
 document.addEventListener("contextmenu", e => e.preventDefault());
 
 // ✅ schermo intero (si attiva DOPO l'inserimento dei dati, perché a schermo intero la tastiera non funziona)
@@ -745,6 +746,14 @@ frameEl.addEventListener("load", () => {
     }, true);
   } catch (e) {}
 });
+// ✅ diario degli eventi audio (ultimi 150), utile per capire cosa è successo se la prova si inceppa
+function logAudio(ev, extra){
+  try{
+    const arr = JSON.parse(localStorage.getItem("diario_audio") || "[]");
+    arr.push(Object.assign({ t:new Date().toISOString().slice(11,23), ev, ctx: ctxAudio ? ctxAudio.state : null, fase: sessionStorage.getItem("fase"), n: sessionStorage.getItem("idx") }, extra || {}));
+    localStorage.setItem("diario_audio", JSON.stringify(arr.slice(-150)));
+  }catch(e){}
+}
 let ctxAudio = null;
 const bufferAudio = {};
 let sorgenteCorrente = null;
@@ -755,7 +764,7 @@ function sbloccaAudio(){
     if(!AC) return;
     if(!ctxAudio){
       ctxAudio = new AC();
-      ctxAudio.onstatechange = () => setTimeout(controllaAudio, 200);
+      ctxAudio.onstatechange = () => { logAudio("ctx_stato"); setTimeout(controllaAudio, 200); };
     }
     if(ctxAudio.state !== "running") ctxAudio.resume();
     // suono muto: su iPad serve per sbloccare l'audio
@@ -768,9 +777,15 @@ function sbloccaAudio(){
 // ✅ ricrea l'audio da zero (da usare dopo che la pagina è stata nascosta/bloccata: iOS a volte
 // dice "running" ma poi non esce più suono)
 function rinnovaAudio(){
-  try{ if(ctxAudio) ctxAudio.close(); }catch(e){}
+  try{ if(ctxAudio){ ctxAudio.onstatechange = null; ctxAudio.close(); } }catch(e){}
   ctxAudio = null;
   sbloccaAudio();
+}
+
+// ✅ da usare in TUTTI i pulsanti: se la pagina è stata nascosta/bloccata, ricrea l'audio da zero
+function preparaAudio(){
+  if(paginaNascosta){ rinnovaAudio(); paginaNascosta = false; }
+  else sbloccaAudio();
 }
 
 // ✅ dopo il blocco schermo iOS riattiva l'audio con un po' di ritardo: aspetto che sia davvero pronto
@@ -783,7 +798,7 @@ async function attendiAudioPronto(){
   await aspetta(1500);
   if(ctxAudio && ctxAudio.state !== "running"){
     // contesto rimasto bloccato: ne creo uno nuovo
-    try{ ctxAudio.close(); }catch(e){}
+    try{ ctxAudio.onstatechange = null; ctxAudio.close(); }catch(e){}
     ctxAudio = null;
     sbloccaAudio();
     await aspetta(1500);
@@ -796,25 +811,46 @@ function decodifica(arrayBuffer){
 }
 
 // chiamata dalle pagine delle frasi: suona la frase e avvisa quando parte davvero
-window.suonaFrase = async function(url, cb){
-  if(!ctxAudio) throw new Error("audio non sbloccato");
-  if(ctxAudio.state !== "running" && !(await attendiAudioPronto())) throw new Error("audio non sbloccato");
-  let buf = bufferAudio[url];
-  if(!buf){
-    const resp = await fetch(url);
-    if(!resp.ok) throw new Error("audio non trovato: " + url);
-    buf = await decodifica(await resp.arrayBuffer());
-    bufferAudio[url] = buf;
-  }
-  if(ctxAudio.state !== "running") throw new Error("audio sospeso");
-  const src = ctxAudio.createBufferSource();
-  src.buffer = buf;
-  src.connect(ctxAudio.destination);
-  src.onended = () => { if(sorgenteCorrente === src) sorgenteCorrente = null; if(cb && cb.onEnd) cb.onEnd(); };
-  if(sorgenteCorrente){ try{ sorgenteCorrente.stop(); }catch(e){} }
-  sorgenteCorrente = src;
-  src.start(0);
-  if(cb && cb.onStart) cb.onStart(buf.duration);
+window.suonaFrase = function(url, cb){
+  const t0 = performance.now();
+  let annullata = false;
+
+  const lavoro = (async () => {
+    if(!ctxAudio) throw new Error("audio non sbloccato");
+    if(ctxAudio.state !== "running" && !(await attendiAudioPronto())) throw new Error("audio non sbloccato");
+    let buf = bufferAudio[url];
+    if(!buf){
+      // ✅ se la rete si inceppa la richiesta viene interrotta (non resta appesa)
+      const ac = new AbortController();
+      const to = setTimeout(() => ac.abort(), 3500);
+      let dati;
+      try{
+        const resp = await fetch(url, { signal: ac.signal });
+        if(!resp.ok) throw new Error("audio non trovato: " + url);
+        dati = await resp.arrayBuffer();
+      } finally { clearTimeout(to); }
+      buf = await decodifica(dati);
+      bufferAudio[url] = buf;
+    }
+    if(annullata) return;   // troppo tardi: la pagina della frase ha già mostrato "Ascolta la frase"
+    if(ctxAudio.state !== "running") throw new Error("audio sospeso");
+    const src = ctxAudio.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctxAudio.destination);
+    src.onended = () => { delete bufferAudio[url]; if(sorgenteCorrente === src) sorgenteCorrente = null; if(cb && cb.onEnd) cb.onEnd(); };
+    if(sorgenteCorrente){ try{ sorgenteCorrente.stop(); }catch(e){} }
+    sorgenteCorrente = src;
+    src.start(0);
+    if(cb && cb.onStart) cb.onStart(buf.duration);
+  })();
+
+  // ✅ se entro 4,5 secondi l'audio non è partito, la frase mostra il pulsante "Ascolta la frase"
+  const guardia = new Promise((_, ko) => setTimeout(() => { annullata = true; ko(new Error("audio troppo lento")); }, 4500));
+
+  return Promise.race([lavoro, guardia]).then(
+    () => { logAudio("frase_ok", { ms: Math.round(performance.now() - t0) }); },
+    (e) => { logAudio("frase_errore", { ms: Math.round(performance.now() - t0), msg: String(e && e.message || e) }); throw e; }
+  );
 };
 
 function apriFrase(file){
@@ -849,6 +885,7 @@ function resetUI(){
   btn.style.display="inline-block";
   btn.disabled=false;
   btn.onclick=null;
+  const b2 = document.getElementById("btnDiario"); if(b2) b2.remove();
 }
 
 /* =========================
@@ -872,7 +909,8 @@ function leggiSessioneCorrente(){
       scolarita: localStorage.getItem(LK.scolarita)
     },
     risposte_preliminare: grezzo("risposte_preliminare_sessione"),
-    risposte: grezzo("risposte_sessione")
+    risposte: grezzo("risposte_sessione"),
+    diario_audio: grezzo("diario_audio")   // ✅ diario audio di questo partecipante
   };
 }
 
@@ -900,6 +938,7 @@ function archiviaSessione(){
 function resetSession(){
   localStorage.removeItem("risposte_sessione");
   localStorage.removeItem("risposte_preliminare_sessione");
+  localStorage.removeItem("diario_audio");   // nuovo partecipante = diario nuovo (il precedente è già nell'archivio)
   sessionStorage.clear();
 
   const preSeq = shuffle(eserciziPreliminari.slice());
@@ -920,7 +959,7 @@ function renderSetup(){
 
   btn.textContent="Continua";
   btn.onclick=()=>{
-    sbloccaAudio();
+    preparaAudio();
     const numero = numPartecipanteEl.value.trim();
     const gruppoEl = document.querySelector('input[name="gruppo"]:checked');
     const gruppo = gruppoEl ? gruppoEl.value : null;
@@ -970,7 +1009,7 @@ function renderPreStart(){
 
   btn.textContent="Inizia";
   btn.onclick=()=>{
-    sbloccaAudio();
+    preparaAudio();
     sessionStorage.setItem(K.fase,"pre_ready");
     renderPreReady();
   };
@@ -984,7 +1023,7 @@ function renderPreReady(){
   setTitle("Prova preliminare");
   btn.textContent="Inizia";
   btn.onclick=()=>{
-    sbloccaAudio();
+    preparaAudio();
     sessionStorage.setItem(K.pre_i,"0");
     sessionStorage.setItem(K.fase,"pre_run");
     runPre();
@@ -1034,7 +1073,7 @@ function renderTestIntro(){
   setTitle("Types of Token");
   btn.textContent="Inizia";
   btn.onclick=()=>{
-    sbloccaAudio();
+    preparaAudio();
     sessionStorage.setItem(K.fase,"test");
     runTest();
   };
@@ -1071,7 +1110,7 @@ function renderPausa(){
       btn.textContent = "Riprendi prova";
       btn.onclick = async ()=>{
         btn.disabled = true;
-        if(paginaNascosta){ rinnovaAudio(); paginaNascosta = false; } else sbloccaAudio();
+        rinnovaAudio(); paginaNascosta = false;   // dopo la pausa l'audio viene sempre ricreato
         await attendiAudioPronto();   // dopo un blocco schermo l'audio ci mette un attimo a ripartire
         sessionStorage.setItem(K.pausa, "true");
         sessionStorage.setItem(K.fase, "test");
@@ -1106,6 +1145,20 @@ function runTest(){
 }
 
 /* =========================
+   ✅ SALVA DIARIO AUDIO (file .txt)
+========================= */
+function scaricaDiario(){
+  let arr = []; try{ arr = JSON.parse(localStorage.getItem("diario_audio") || "[]"); }catch(e){}
+  const num = localStorage.getItem(LK.numPartecipante) || "x";
+  const txt = arr.map(x => JSON.stringify(x)).join("\n") || "(vuoto)";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([txt], { type:"text/plain" }));
+  a.download = "diario_audio_p" + num + "_" + new Date().toISOString().slice(0,16).replace(/[:T]/g,"-") + ".txt";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/* =========================
    TEST END
 ========================= */
 function renderTestEnd(){
@@ -1114,6 +1167,17 @@ function renderTestEnd(){
   archiviaSessione();   // copia di sicurezza interna
   btn.textContent="Vedi risposte";
   btn.onclick=()=>location.href="risposte.html";
+
+  // ✅ secondo pulsante, più piccolo: salva il diario audio come file di testo
+  let b2 = document.getElementById("btnDiario");
+  if(!b2){
+    b2 = document.createElement("button");
+    b2.id = "btnDiario"; b2.type = "button";
+    b2.style.cssText = "display:block;margin:16px auto 0;font-size:15px;padding:8px 16px;opacity:.8;";
+    btn.insertAdjacentElement("afterend", b2);
+  }
+  b2.textContent = "Salva diario audio";
+  b2.onclick = scaricaDiario;
 }
 
 /* =========================
@@ -1125,7 +1189,12 @@ function renderRiprendi(){
   setTitle("Types of Token");
   btn.textContent="Riprendi";
   btn.onclick=()=>{
-    sbloccaAudio();
+    preparaAudio();
+    // la frase interrotta dal ricaricamento non era stata salvata: riparte da capo
+    const fase = sessionStorage.getItem(K.fase);
+    const chiave = (fase==="pre_run") ? K.pre_i : K.idx;
+    const i = parseInt(sessionStorage.getItem(chiave)||"0",10);
+    sessionStorage.setItem(chiave, String(Math.max(0,i-1)));
     continua();
   };
 }
@@ -1155,13 +1224,14 @@ function controllaAudio(){
 }
 
 document.addEventListener("visibilitychange", () => {
+  logAudio(document.hidden ? "pagina_nascosta" : "pagina_visibile");
   if(document.hidden){ if(ctxAudio) paginaNascosta = true; }
   else setTimeout(controllaAudio, 300);
 });
 window.addEventListener("pageshow", () => setTimeout(controllaAudio, 300));
 
 document.getElementById("ovRiprendiBtn").onclick = async () => {
-  if(paginaNascosta) rinnovaAudio(); else sbloccaAudio();
+  rinnovaAudio();
   if(!(await attendiAudioPronto())) return;   // resta la schermata: basta riprovare
   paginaNascosta = false;
   ovRiprendi.style.display = "none";
@@ -1178,6 +1248,30 @@ document.getElementById("ovRiprendiBtn").onclick = async () => {
     runTest();
   }
 };
+
+/* =========================
+   ✅ DIARIO AUDIO (nascosto): tocca 5 volte il titolo nella schermata dati/istruzioni
+========================= */
+(function(){
+  let n = 0, tmr = null;
+  titleEl.style.cursor = "pointer";
+  titleEl.addEventListener("pointerdown", () => {
+    n++; clearTimeout(tmr); tmr = setTimeout(() => { n = 0; }, 2500);
+    if(n < 5) return;
+    n = 0;
+    const d = document.createElement("div");
+    d.setAttribute("data-scroll","1");
+    d.style.cssText = "position:fixed;inset:0;z-index:100000;background:#fff;padding:16px;overflow:auto;font:13px monospace;text-align:left;touch-action:auto;";
+    const chiudi = document.createElement("button");
+    chiudi.textContent = "Chiudi"; chiudi.onclick = () => d.remove();
+    const pre = document.createElement("pre");
+    pre.style.whiteSpace = "pre-wrap";
+    let arr = []; try{ arr = JSON.parse(localStorage.getItem("diario_audio") || "[]"); }catch(e){}
+    pre.textContent = arr.map(x => JSON.stringify(x)).join("\n") || "(vuoto)";
+    d.appendChild(chiudi); d.appendChild(pre);
+    document.body.appendChild(d);
+  });
+})();
 
 /* =========================
    START
