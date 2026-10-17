@@ -209,7 +209,6 @@
 <body>
 <div id="container">
   <h1 id="title">Types of Token</h1>
-  <div style="position:fixed;left:6px;bottom:4px;font:10px sans-serif;color:#c8c8c8;pointer-events:none;z-index:1">v17ott-b</div>
 
   <div id="setupBox">
     <div id="setupError"></div>
@@ -1168,16 +1167,6 @@ function renderTestEnd(){
   btn.textContent="Vedi risposte";
   btn.onclick=()=>location.href="risposte.html";
 
-  // ✅ secondo pulsante, più piccolo: salva il diario audio come file di testo
-  let b2 = document.getElementById("btnDiario");
-  if(!b2){
-    b2 = document.createElement("button");
-    b2.id = "btnDiario"; b2.type = "button";
-    b2.style.cssText = "display:block;margin:16px auto 0;font-size:15px;padding:8px 16px;opacity:.8;";
-    btn.insertAdjacentElement("afterend", b2);
-  }
-  b2.textContent = "Salva diario audio";
-  b2.onclick = scaricaDiario;
 }
 
 /* =========================
@@ -1268,7 +1257,9 @@ document.getElementById("ovRiprendiBtn").onclick = async () => {
     pre.style.whiteSpace = "pre-wrap";
     let arr = []; try{ arr = JSON.parse(localStorage.getItem("diario_audio") || "[]"); }catch(e){}
     pre.textContent = arr.map(x => JSON.stringify(x)).join("\n") || "(vuoto)";
-    d.appendChild(chiudi); d.appendChild(pre);
+    const scarica = document.createElement("button");
+    scarica.textContent = "Scarica file"; scarica.style.marginLeft = "12px"; scarica.onclick = scaricaDiario;
+    d.appendChild(chiudi); d.appendChild(scarica); d.appendChild(pre);
     document.body.appendChild(d);
   });
 })();
